@@ -22,7 +22,7 @@ A modern, intuitive command-line interface for interacting with the Cloudflare A
 If you have a Go environment set up, you can install the CLI with:
 
 ```sh
-go install [github.com/dajooo/cloudflare-cli@latest](https://github.com/dajooo/cloudflare-cli@latest)
+go install github.com/dajooo/cloudflare-cli@latest
 ````
 
 ### From Binaries
