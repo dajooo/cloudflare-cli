@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/cache"
@@ -19,16 +21,27 @@ var cacheCmd = &cobra.Command{
 var cachePurgeCmd = &cobra.Command{
 	Use:   "purge",
 	Short: "Purges the Cloudflare cache",
-	Run:   executeCachePurge,
+	Run: executor.NewBuilder[*cf.Client, any]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Purging cache", purgeCache).
+		Display(func(_ any, duration time.Duration, err error) {
+			if err != nil {
+				fmt.Println(ui.ErrorMessage("Error purging cache", err))
+				return
+			}
+			fmt.Println(ui.Success(fmt.Sprintf("Successfully purged cache in %v", duration)))
+		}).
+		Build().
+		CobraRun(),
 }
 
-var zoneName string
+var zoneIdentifier string
 var all bool
 var files []string
 var tags []string
 
 func init() {
-	cachePurgeCmd.Flags().StringVar(&zoneName, "zone", "", "The zone to purge the cache for")
+	cachePurgeCmd.Flags().StringVar(&zoneIdentifier, "zone", "", "The zone to purge the cache for")
 	cachePurgeCmd.Flags().BoolVar(&all, "all", false, "Purge all files")
 	cachePurgeCmd.Flags().StringSliceVar(&files, "files", []string{}, "A list of files to purge")
 	cachePurgeCmd.Flags().StringSliceVar(&tags, "tags", []string{}, "A list of tags to purge")
@@ -36,17 +49,13 @@ func init() {
 	rootCmd.AddCommand(cacheCmd)
 }
 
-func executeCachePurge(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
+func purgeCache(client *cf.Client, _ *cobra.Command, _ []string) (any, error) {
+	if zoneIdentifier == "" {
+		return nil, fmt.Errorf("the --zone flag is required")
 	}
-
-	zoneID, err := cloudflare.ZoneIDByName(client, zoneName)
+	zoneID, _, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error finding zone", err))
-		return
+		return nil, fmt.Errorf("error finding zone: %w", err)
 	}
 
 	var body cache.CachePurgeParamsBodyUnion
@@ -61,8 +70,7 @@ func executeCachePurge(cmd *cobra.Command, args []string) {
 			Tags: cf.F(tags),
 		}
 	} else {
-		fmt.Println(ui.Warning("Please specify what to purge"))
-		return
+		return nil, fmt.Errorf("please specify what to purge with --all, --files, or --tags")
 	}
 
 	params := cache.CachePurgeParams{
@@ -71,10 +79,5 @@ func executeCachePurge(cmd *cobra.Command, args []string) {
 	}
 
 	_, err = client.Cache.Purge(context.Background(), params)
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error purging cache", err))
-		return
-	}
-
-	fmt.Println(ui.Success("Successfully purged cache"))
+	return nil, err
 }

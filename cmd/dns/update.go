@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
@@ -21,7 +23,18 @@ var updateCmd = &cobra.Command{
 	Use:   "update <zone> <record_id>",
 	Short: "Updates an existing DNS record, identified by its ID",
 	Args:  cobra.ExactArgs(2),
-	Run:   executeDnsUpdate,
+	Run: executor.NewBuilder[*cf.Client, *dns.RecordResponse]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Updating DNS record", updateDnsRecord).
+		Display(func(record *dns.RecordResponse, duration time.Duration, err error) {
+			if err != nil {
+				fmt.Println(ui.ErrorMessage("Error updating DNS record", err))
+				return
+			}
+			fmt.Println(ui.Success(fmt.Sprintf("Successfully updated DNS record %s (%s) in %v", record.Name, record.ID, duration)))
+		}).
+		Build().
+		CobraRun(),
 }
 
 func init() {
@@ -32,26 +45,21 @@ func init() {
 	DnsCmd.AddCommand(updateCmd)
 }
 
-func executeDnsUpdate(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
+func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string) (*dns.RecordResponse, error) {
 	zoneIdentifier := args[0]
-	zoneID, err := cloudflare.ZoneIDByName(client, zoneIdentifier)
+	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error finding zone", err))
-		return
+		return nil, fmt.Errorf("error finding zone: %w", err)
 	}
 
-	recordName := args[1]
-
-	recordID, err := cloudflare.DNSRecordIDByName(client, zoneID, zoneIdentifier, recordName)
+	recordIdentifier := args[1]
+	recordID, err := cloudflare.LookupDNSRecordID(client, zoneID, zoneName, recordIdentifier)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error finding record", err))
-		return
+		return nil, fmt.Errorf("error finding record: %w", err)
+	}
+
+	if updateRecordType == "" || updateRecordName == "" || updateRecordContent == "" {
+		return nil, fmt.Errorf("flags --name, --type, and --content are required for an update")
 	}
 
 	var body dns.RecordUpdateParamsBodyUnion
@@ -60,26 +68,25 @@ func executeDnsUpdate(cmd *cobra.Command, args []string) {
 		body = &dns.ARecordParam{
 			Type:    cf.F(dns.ARecordTypeA),
 			Name:    cf.F(updateRecordName),
-			Content: cf.F(strings.ReplaceAll(updateRecordContent, "@", zoneIdentifier)),
+			Content: cf.F(strings.ReplaceAll(updateRecordContent, "@", zoneName)),
 			Proxied: cf.F(updateProxied),
 		}
 	case "AAAA":
 		body = &dns.AAAARecordParam{
 			Type:    cf.F(dns.AAAARecordTypeAAAA),
 			Name:    cf.F(updateRecordName),
-			Content: cf.F(strings.ReplaceAll(updateRecordContent, "@", zoneIdentifier)),
+			Content: cf.F(strings.ReplaceAll(updateRecordContent, "@", zoneName)),
 			Proxied: cf.F(updateProxied),
 		}
 	case "CNAME":
 		body = &dns.CNAMERecordParam{
 			Type:    cf.F(dns.CNAMERecordTypeCNAME),
 			Name:    cf.F(updateRecordName),
-			Content: cf.F(strings.ReplaceAll(updateRecordContent, "@", zoneIdentifier)),
+			Content: cf.F(strings.ReplaceAll(updateRecordContent, "@", zoneName)),
 			Proxied: cf.F(updateProxied),
 		}
 	default:
-		fmt.Println(ui.ErrorMessage(fmt.Sprintf("Unsupported record type: %s", updateRecordType)))
-		return
+		return nil, fmt.Errorf("unsupported record type: %s", updateRecordType)
 	}
 
 	params := dns.RecordUpdateParams{
@@ -89,9 +96,7 @@ func executeDnsUpdate(cmd *cobra.Command, args []string) {
 
 	record, err := client.DNS.Records.Update(context.Background(), recordID, params)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error updating DNS record", err))
-		return
+		return nil, err
 	}
-
-	fmt.Println(ui.Success(fmt.Sprintf("Successfully updated DNS record %s", record.Name)))
+	return record, nil
 }

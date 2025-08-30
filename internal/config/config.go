@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"path"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
@@ -24,9 +25,9 @@ func initViper() error {
 		return err
 	}
 
-	viper.SetConfigName(".cloudflare-cli")
+	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath(home)
+	viper.AddConfigPath(path.Join(home, ".cloudflare-cli"))
 
 	viper.SetEnvPrefix("CF")
 	viper.AutomaticEnv()

@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
+	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/user"
 	"github.com/spf13/cobra"
 )
@@ -14,30 +17,28 @@ import (
 var whoAmICmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Get current user",
-	Run:   executeWhoAmI,
+	Run: executor.NewBuilder[*cf.Client, *user.UserGetResponse]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Fetching user information", fetchUser).
+		Display(printUserInfo).
+		Build().
+		CobraRun(),
 }
 
 func init() {
 	rootCmd.AddCommand(whoAmICmd)
 }
 
-func executeWhoAmI(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
+func fetchUser(client *cf.Client, _ *cobra.Command, _ []string) (*user.UserGetResponse, error) {
+	return client.User.Get(context.Background())
+}
 
-	me, err := client.User.Get(context.Background())
+func printUserInfo(user *user.UserGetResponse, fetchDuration time.Duration, err error) {
 	if err != nil {
 		fmt.Println(ui.ErrorMessage("Error getting user information", err))
 		return
 	}
 
-	printUserInfo(me)
-}
-
-func printUserInfo(user *user.UserGetResponse) {
 	fmt.Println(ui.Title("Account Information"))
 	fmt.Println()
 
@@ -126,5 +127,5 @@ func printUserInfo(user *user.UserGetResponse) {
 		fmt.Println()
 	}
 
-	fmt.Println(ui.Success("Authentication successful"))
+	fmt.Println(ui.Success(fmt.Sprintf("Authentication successful (took %v)", fetchDuration)))
 }

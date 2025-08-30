@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
@@ -19,32 +21,30 @@ var createCmd = &cobra.Command{
 	Use:   "create <zone> <name> <type> <content>",
 	Short: "Creates a new DNS record",
 	Args:  cobra.ExactArgs(4),
-	Run:   executeDnsCreate,
+	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Fetching DNS records", createDnsRecord).
+		Display(func(record *RecordInformation, duration time.Duration, err error) {
+			if err != nil {
+				fmt.Println(ui.ErrorMessage("Error deleting DNS record", err))
+				return
+			}
+			fmt.Println(ui.Success(fmt.Sprintf("Successfully created DNS record %s.%s (%s)", record.RecordName, record.ZoneName, record.RecordID)))
+		}).
+		Build().
+		CobraRun(),
 }
 
-func init() {
-	createCmd.Flags().IntVar(&ttl, "ttl", 1, "The TTL of the DNS record")
-	createCmd.Flags().BoolVar(&proxied, "proxied", false, "Whether the DNS record should be proxied")
-	DnsCmd.AddCommand(createCmd)
-}
-
-func executeDnsCreate(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
+func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string) (*RecordInformation, error) {
 	zoneIdentifier := args[0]
-	zoneID, err := cloudflare.ZoneIDByName(client, zoneIdentifier)
+	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error finding zone", err))
-		return
+		return nil, fmt.Errorf("error finding zone: %s", err)
 	}
 
 	recordName := args[1]
 	recordType := args[2]
-	recordContent := strings.ReplaceAll(args[3], "@", zoneIdentifier)
+	recordContent := strings.ReplaceAll(args[3], "@", zoneName)
 
 	var body dns.RecordNewParamsBodyUnion
 	switch strings.ToUpper(recordType) {
@@ -73,8 +73,7 @@ func executeDnsCreate(cmd *cobra.Command, args []string) {
 			Proxied: cf.F(proxied),
 		}
 	default:
-		fmt.Println(ui.ErrorMessage(fmt.Sprintf("Unsupported record type: %s", recordType)))
-		return
+		return nil, fmt.Errorf("unsupported record type: %s", recordType)
 	}
 
 	params := dns.RecordNewParams{
@@ -84,9 +83,19 @@ func executeDnsCreate(cmd *cobra.Command, args []string) {
 
 	record, err := client.DNS.Records.New(context.Background(), params)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error creating DNS record", err))
-		return
+		return nil, fmt.Errorf("error creating DNS record: %s", err)
 	}
 
-	fmt.Println(ui.Success(fmt.Sprintf("Successfully created DNS record %s", record.Name)))
+	return &RecordInformation{
+		ZoneID:     zoneID,
+		ZoneName:   zoneName,
+		RecordID:   record.ID,
+		RecordName: record.Name,
+	}, nil
+}
+
+func init() {
+	createCmd.Flags().IntVar(&ttl, "ttl", 1, "The TTL of the DNS record")
+	createCmd.Flags().BoolVar(&proxied, "proxied", false, "Whether the DNS record should be proxied")
+	DnsCmd.AddCommand(createCmd)
 }

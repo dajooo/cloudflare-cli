@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
+	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/accounts"
 	"github.com/spf13/cobra"
 )
@@ -19,7 +22,12 @@ var accountCmd = &cobra.Command{
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all accessible accounts",
-	Run:   executeAccountList,
+	Run: executor.NewBuilder[*cf.Client, []accounts.Account]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Fetching accounts", fetchAccounts).
+		Display(printAccountsList).
+		Build().
+		CobraRun(),
 }
 
 func init() {
@@ -27,23 +35,20 @@ func init() {
 	rootCmd.AddCommand(accountCmd)
 }
 
-func executeAccountList(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
+func fetchAccounts(client *cf.Client, _ *cobra.Command, _ []string) ([]accounts.Account, error) {
 	accountsList, err := client.Accounts.List(context.Background(), accounts.AccountListParams{})
+	if err != nil {
+		return nil, err
+	}
+	return accountsList.Result, nil
+}
+
+func printAccountsList(accountsList []accounts.Account, fetchDuration time.Duration, err error) {
 	if err != nil {
 		fmt.Println(ui.ErrorMessage("Error fetching accounts", err))
 		return
 	}
 
-	printAccountsList(accountsList.Result)
-}
-
-func printAccountsList(accountsList []accounts.Account) {
 	fmt.Println(ui.Title("Accessible Accounts"))
 	fmt.Println()
 
@@ -93,5 +98,5 @@ func printAccountsList(accountsList []accounts.Account) {
 		fmt.Println()
 	}
 
-	fmt.Println(ui.Success(fmt.Sprintf("Found %d accessible account(s)", len(accountsList))))
+	fmt.Println(ui.Success(fmt.Sprintf("Found %d accessible account(s) in %v", len(accountsList), fetchDuration)))
 }

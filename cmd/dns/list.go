@@ -2,10 +2,13 @@ package dns
 
 import (
 	"context"
+
 	"fmt"
 	"strings"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
@@ -20,7 +23,12 @@ var listCmd = &cobra.Command{
 	Use:   "list <zone>",
 	Short: "Lists, searches, and filters DNS records for a given zone",
 	Args:  cobra.ExactArgs(1),
-	Run:   executeDnsList,
+	Run: executor.NewBuilder[*cf.Client, []dns.RecordResponse]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Fetching DNS records", fetchDnsRecords).
+		Display(printDnsRecords).
+		Build().
+		CobraRun(),
 }
 
 func init() {
@@ -30,28 +38,26 @@ func init() {
 	DnsCmd.AddCommand(listCmd)
 }
 
-func executeDnsList(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
+func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string) ([]dns.RecordResponse, error) {
 	zoneIdentifier := args[0]
-	zoneID, err := cloudflare.ZoneIDByName(client, zoneIdentifier)
+	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error finding zone", err))
-		return
+		return nil, err
 	}
 
-	params := dns.RecordListParams{
-		ZoneID: cf.F(zoneID),
-	}
+	params := dns.RecordListParams{ZoneID: cf.F(zoneID)}
+
 	if recordType != "" {
 		params.Type = cf.F(dns.RecordListParamsType(recordType))
 	}
 	if recordName != "" {
-		params.Name = cf.F(dns.RecordListParamsName{Exact: cf.F(recordName)})
+		var fqdn string
+		if recordName == "@" || recordName == zoneName {
+			fqdn = zoneName
+		} else {
+			fqdn = strings.TrimSuffix(recordName, "."+zoneName) + "." + zoneName
+		}
+		params.Name = cf.F(dns.RecordListParamsName{Exact: cf.F(fqdn)})
 	}
 	if recordContent != "" {
 		params.Content = cf.F(dns.RecordListParamsContent{Exact: cf.F(recordContent)})
@@ -59,19 +65,21 @@ func executeDnsList(cmd *cobra.Command, args []string) {
 
 	records, err := client.DNS.Records.List(context.Background(), params)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error fetching DNS records", err))
-		return
+		return nil, fmt.Errorf("could not fetch DNS records: %w", err)
 	}
-
-	printDnsRecords(records.Result)
+	return records.Result, nil
 }
 
-func printDnsRecords(records []dns.RecordResponse) {
+func printDnsRecords(records []dns.RecordResponse, fetchDuration time.Duration, err error) {
+	if err != nil {
+		fmt.Println(ui.ErrorMessage("Failed to list DNS records", err))
+		return
+	}
 	fmt.Println(ui.Title("DNS Records"))
 	fmt.Println()
 
 	if len(records) == 0 {
-		fmt.Println(ui.Warning("No DNS records found"))
+		fmt.Println(ui.Warning("No DNS records found matching your criteria"))
 		return
 	}
 
@@ -107,5 +115,5 @@ func printDnsRecords(records []dns.RecordResponse) {
 		fmt.Println()
 	}
 
-	fmt.Println(ui.Success(fmt.Sprintf("Found %d DNS record(s)", len(records))))
+	fmt.Println(ui.Success(fmt.Sprintf("Found %d DNS record(s) in %v", len(records), fetchDuration)))
 }

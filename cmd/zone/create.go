@@ -3,8 +3,10 @@ package zone
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
@@ -18,7 +20,18 @@ var createCmd = &cobra.Command{
 	Use:   "create <domain>",
 	Short: "Adds a new domain to Cloudflare",
 	Args:  cobra.ExactArgs(1),
-	Run:   executeZoneCreate,
+	Run: executor.NewBuilder[*cf.Client, *zones.Zone]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Creating zone", createZone).
+		Display(func(zone *zones.Zone, duration time.Duration, err error) {
+			if err != nil {
+				fmt.Println(ui.ErrorMessage("Error creating zone", err))
+				return
+			}
+			fmt.Println(ui.Success(fmt.Sprintf("Successfully created zone %s (%s) in %v", zone.Name, zone.ID, duration)))
+		}).
+		Build().
+		CobraRun(),
 }
 
 func init() {
@@ -27,13 +40,7 @@ func init() {
 	ZoneCmd.AddCommand(createCmd)
 }
 
-func executeZoneCreate(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
+func createZone(client *cf.Client, _ *cobra.Command, args []string) (*zones.Zone, error) {
 	domain := args[0]
 	params := zones.ZoneNewParams{
 		Name: cf.F(domain),
@@ -44,9 +51,7 @@ func executeZoneCreate(cmd *cobra.Command, args []string) {
 
 	zone, err := client.Zones.New(context.Background(), params)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error creating zone", err))
-		return
+		return nil, err
 	}
-
-	fmt.Println(ui.Success(fmt.Sprintf("Successfully created zone %s", zone.Name)))
+	return zone, nil
 }

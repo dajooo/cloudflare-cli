@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
+	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +20,12 @@ var status string
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all zones in an account",
-	Run:   executeZoneList,
+	Run: executor.NewBuilder[*cf.Client, []zones.Zone]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Fetching zones", fetchZones).
+		Display(printZonesList).
+		Build().
+		CobraRun(),
 }
 
 func init() {
@@ -26,13 +34,7 @@ func init() {
 	ZoneCmd.AddCommand(listCmd)
 }
 
-func executeZoneList(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
+func fetchZones(client *cf.Client, _ *cobra.Command, _ []string) ([]zones.Zone, error) {
 	params := zones.ZoneListParams{}
 	if accountID != "" {
 		params.Account.Value.ID.Value = accountID
@@ -43,14 +45,17 @@ func executeZoneList(cmd *cobra.Command, args []string) {
 
 	zonesList, err := client.Zones.List(context.Background(), params)
 	if err != nil {
+		return nil, err
+	}
+	return zonesList.Result, nil
+}
+
+func printZonesList(zonesList []zones.Zone, fetchDuration time.Duration, err error) {
+	if err != nil {
 		fmt.Println(ui.ErrorMessage("Error fetching zones", err))
 		return
 	}
 
-	printZonesList(zonesList.Result)
-}
-
-func printZonesList(zonesList []zones.Zone) {
 	fmt.Println(ui.Title("Accessible Zones"))
 	fmt.Println()
 
@@ -86,5 +91,5 @@ func printZonesList(zonesList []zones.Zone) {
 		fmt.Println()
 	}
 
-	fmt.Println(ui.Success(fmt.Sprintf("Found %d accessible zone(s)", len(zonesList))))
+	fmt.Println(ui.Success(fmt.Sprintf("Found %d accessible zone(s) in %v", len(zonesList), fetchDuration)))
 }

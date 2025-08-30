@@ -3,8 +3,10 @@ package zone
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
@@ -12,6 +14,11 @@ import (
 )
 
 var yes bool
+
+type DeletedZoneInfo struct {
+	ID   string
+	Name string
+}
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <zone_name|zone_id>",
@@ -26,12 +33,6 @@ func init() {
 }
 
 func executeZoneDelete(cmd *cobra.Command, args []string) {
-	client, err := cloudflare.NewClient()
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error loading config", err))
-		return
-	}
-
 	zoneIdentifier := args[0]
 
 	if !yes {
@@ -42,17 +43,35 @@ func executeZoneDelete(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	zoneID, err := cloudflare.ZoneIDByName(client, zoneIdentifier)
+	executor.NewBuilder[*cf.Client, *DeletedZoneInfo]().
+		Setup("Decrypting configuration", cloudflare.NewClient).
+		Fetch("Deleting zone", deleteZone).
+		Display(func(zone *DeletedZoneInfo, duration time.Duration, err error) {
+			if err != nil {
+				fmt.Println(ui.ErrorMessage("Error deleting zone", err))
+				return
+			}
+			fmt.Println(ui.Success(fmt.Sprintf("Successfully deleted zone %s (%s) in %v", zone.Name, zone.ID, duration)))
+		}).
+		Build().
+		CobraRun()(cmd, args)
+}
+
+func deleteZone(client *cf.Client, _ *cobra.Command, args []string) (*DeletedZoneInfo, error) {
+	zoneIdentifier := args[0]
+
+	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error finding zone", err))
-		return
+		return nil, fmt.Errorf("error finding zone: %w", err)
 	}
 
 	_, err = client.Zones.Delete(context.Background(), zones.ZoneDeleteParams{ZoneID: cf.F(zoneID)})
 	if err != nil {
-		fmt.Println(ui.ErrorMessage("Error deleting zone", err))
-		return
+		return nil, err
 	}
 
-	fmt.Println(ui.Success(fmt.Sprintf("Successfully deleted zone %s", zoneIdentifier)))
+	return &DeletedZoneInfo{
+		ID:   zoneID,
+		Name: zoneName,
+	}, nil
 }
