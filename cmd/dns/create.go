@@ -23,7 +23,7 @@ var createCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(4),
 	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching DNS records", createDnsRecord).
+		Fetch("Creating DNS record", createDnsRecord).
 		Display(func(record *RecordInformation, duration time.Duration, err error) {
 			if err != nil {
 				fmt.Println(ui.ErrorMessage("Error deleting DNS record", err))

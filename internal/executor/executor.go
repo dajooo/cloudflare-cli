@@ -12,6 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	ansiEraseLine = "\r\x1b[2K"
+)
+
 type Executor[S any, T any] struct {
 	cmd  *cobra.Command
 	args []string
@@ -43,11 +47,13 @@ func (e *Executor[S, T]) Execute() {
 		setupTask := func() (S, error) { return e.setup() }
 		setupResult, _, setupErr = runStage(writer, e.setupMessage, setupTask)
 		if setupErr != nil {
-			fmt.Fprint(writer, "\r \r")
+			fmt.Fprint(writer, ansiEraseLine)
 			_ = writer.Flush()
 			e.display(zeroT, 0, setupErr)
 			return
 		}
+		fmt.Fprint(writer, ansiEraseLine)
+		_ = writer.Flush()
 	}
 
 	fetchTask := func() (T, error) {
@@ -55,7 +61,7 @@ func (e *Executor[S, T]) Execute() {
 	}
 	fetchResult, fetchDuration, fetchErr := runStage(writer, e.fetchingMessage, fetchTask)
 
-	fmt.Fprint(writer, "\r \r")
+	fmt.Fprint(writer, ansiEraseLine)
 	_ = writer.Flush()
 
 	e.display(fetchResult, fetchDuration, fetchErr)
@@ -90,6 +96,7 @@ func (b *Builder[S, T]) Display(displayFunc func(T, time.Duration, error)) *Buil
 
 func (b *Builder[S, T]) Build() *Executor[S, T] {
 	if b.executor.fetch == nil || b.executor.display == nil {
+		// We panic here because this is a developer error (misconfiguration), not a runtime error.
 		panic("Executor is not fully configured: Fetch and Display are required.")
 	}
 	return b.executor
