@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/dajooo/cloudflare-cli/cmd/dns"
+	"dario.lol/cf/cmd/dns"
 )
 
 func init() {

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/ui"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
-	"github.com/dajooo/cloudflare-cli/internal/cloudflare"
-	"github.com/dajooo/cloudflare-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

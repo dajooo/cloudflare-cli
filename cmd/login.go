@@ -5,11 +5,11 @@ import (
 	"errors"
 	"os"
 
+	"dario.lol/cf/internal/config"
+	"dario.lol/cf/internal/prompt"
+	"dario.lol/cf/internal/ui"
 	"github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/option"
-	"github.com/dajooo/cloudflare-cli/internal/config"
-	"github.com/dajooo/cloudflare-cli/internal/prompt"
-	"github.com/dajooo/cloudflare-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

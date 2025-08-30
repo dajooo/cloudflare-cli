@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/dajooo/cloudflare-cli/cmd"
+	"dario.lol/cf/cmd"
 )
 
 func main() {

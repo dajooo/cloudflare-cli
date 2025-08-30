@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
+	"dario.lol/cf/internal/ui"
 	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/lipgloss/v2"
-	"github.com/dajooo/cloudflare-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

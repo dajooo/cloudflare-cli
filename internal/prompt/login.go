@@ -3,8 +3,8 @@ package prompt
 import (
 	"errors"
 
+	"dario.lol/cf/internal/ui"
 	"github.com/charmbracelet/huh"
-	"github.com/dajooo/cloudflare-cli/internal/ui"
 )
 
 type AuthMethod string

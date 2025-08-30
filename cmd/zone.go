@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/dajooo/cloudflare-cli/cmd/zone"
+	"dario.lol/cf/cmd/zone"
 )
 
 func init() {

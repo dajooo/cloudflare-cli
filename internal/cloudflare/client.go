@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"runtime"
 
+	"dario.lol/cf/internal/config"
 	"github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
 	"github.com/cloudflare/cloudflare-go/v6/option"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
-	"github.com/dajooo/cloudflare-cli/internal/config"
 )
 
 var (

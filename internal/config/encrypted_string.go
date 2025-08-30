@@ -5,7 +5,7 @@ import (
 	"encoding"
 	"fmt"
 
-	"github.com/dajooo/cloudflare-cli/internal/crypt"
+	"dario.lol/cf/internal/crypt"
 )
 
 type EncryptedString string

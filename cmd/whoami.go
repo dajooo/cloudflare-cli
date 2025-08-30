@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/ui"
 	"github.com/cloudflare/cloudflare-go/v6/user"
-	"github.com/dajooo/cloudflare-cli/internal/cloudflare"
-	"github.com/dajooo/cloudflare-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"os"
 
-	"github.com/dajooo/cloudflare-cli/internal/config"
-	"github.com/dajooo/cloudflare-cli/internal/ui"
+	"dario.lol/cf/internal/config"
+	"dario.lol/cf/internal/ui"
 	"github.com/spf13/cobra"
 )
 
