@@ -15,7 +15,7 @@ This tier represents the absolute essentials for a functional Cloudflare CLI.
         - **Example:** `cf whoami`
 
 - [x] **Account Management**
-    - [ ] **`cf account list`**
+    - [x] **`cf account list`**
         - **Description:** Lists all accounts (organizations) the user has access to, which is crucial for users who manage multiple entities.
         - **Flags:** `--name` to filter by account name.
         - **Example:** `cf account list`
@@ -51,8 +51,8 @@ This tier represents the absolute essentials for a functional Cloudflare CLI.
         - **Description:** Deletes a DNS record.
         - **Example:** `cf dns delete example.com <id>`
 
-- [ ] **Cache Management**
-    - [ ] **`cf cache purge`**
+- [x] **Cache Management**
+    - [x] **`cf cache purge`**
         - **Description:** Purges the Cloudflare cache, which is essential for forcing updates to your site's content.
         - **Flags:** `--zone <zone>`, `--all`, `--files <url1,...>`, `--tags <tag1,...>`.
         - **Example:** `cf cache purge --zone example.com --all`
