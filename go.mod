@@ -1,4 +1,4 @@
-module github.com/dajooo/cloudflare-cli
+module dario.lol/cf
 
 go 1.25
 
