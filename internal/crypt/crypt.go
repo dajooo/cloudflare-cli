@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"io"
 
+	"dario.lol/cf/internal/constants"
 	password2 "dario.lol/gotils/pkg/password"
 	"filippo.io/age"
 	"github.com/zalando/go-keyring"
 )
-
-var ServiceName string
 
 func Encrypt(data []byte, password string) ([]byte, error) {
 	recipient, err := age.NewScryptRecipient(password)
@@ -54,7 +53,7 @@ func Decrypt(encryptedData []byte, password string) ([]byte, error) {
 }
 
 func GetOrStoreNewlyGeneratedPassword() (string, error) {
-	password, err := keyring.Get(ServiceName, "user")
+	password, err := keyring.Get(constants.ServiceName, "user")
 	if err == nil {
 		return password, nil
 	}
@@ -66,7 +65,7 @@ func GetOrStoreNewlyGeneratedPassword() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to generate password: %w", err)
 	}
-	err = keyring.Set(ServiceName, "user", password)
+	err = keyring.Set(constants.ServiceName, "user", password)
 	if err != nil {
 		return "", fmt.Errorf("failed to set password in keyring: %w", err)
 	}

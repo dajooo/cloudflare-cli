@@ -6,17 +6,13 @@ import (
 	"runtime"
 
 	"dario.lol/cf/internal/config"
+	"dario.lol/cf/internal/constants"
 	"github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/option"
 )
 
-var (
-	Version    = "v0.1.1"
-	ProjectURL = "https://github.com/dajooo/cloudflare-cli"
-)
-
 func UserAgent() string {
-	return fmt.Sprintf("cloudflare-cli/%s (%s; %s) +%s", Version, runtime.GOOS, runtime.GOARCH, ProjectURL)
+	return fmt.Sprintf("cloudflare-cli/%s (%s; %s) +%s", constants.Version, runtime.GOOS, runtime.GOARCH, constants.ProjectURL)
 }
 
 func NewClient() (*cloudflare.Client, error) {
