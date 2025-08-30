@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/cloudflare/cloudflare-go/v6/user"
+	"github.com/dajooo/cloudflare-cli/internal/cloudflare"
 	"github.com/dajooo/cloudflare-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -20,18 +22,19 @@ func init() {
 }
 
 func executeWhoAmI(cmd *cobra.Command, args []string) {
-	printUserInfo(&user.UserGetResponse{
-		ID:                             "5eb63bbbe01eeed093cb22bb8f5acdc3",
-		Suspended:                      false,
-		TwoFactorAuthenticationEnabled: true,
-		Organizations: []user.Organization{
-			{
-				ID:   "0",
-				Name: "Cloudflare-CLI",
-			},
-		},
-		Betas: []string{"zone_level_access_beta"},
-	})
+	client, err := cloudflare.NewClient()
+	if err != nil {
+		fmt.Println(ui.ErrorMessage("Error loading config", err))
+		return
+	}
+
+	me, err := client.User.Get(context.Background())
+	if err != nil {
+		fmt.Println(ui.ErrorMessage("Error getting user information", err))
+		return
+	}
+
+	printUserInfo(me)
 }
 
 func printUserInfo(user *user.UserGetResponse) {
