@@ -11,6 +11,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/types"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	"github.com/alitto/pond/v2"
@@ -28,6 +29,7 @@ var recordName string
 var recordContent string
 var allZones bool
 var compact bool
+var noCache bool
 
 type RecordWithZone struct {
 	dns.RecordResponse
@@ -47,10 +49,22 @@ var listCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: executor.NewBuilder[*cf.Client, []RecordWithZone]().
+	Run: executor.NewBuilder[*cf.Client, []types.DnsRecordWithZone]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Fetching DNS records", fetchDnsRecords).
 		Display(printDnsRecords).
+		SkipCache(noCache).
+		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+			if allZones {
+				return nil, nil
+			}
+			client, _ := cloudflare.NewClient()
+			zoneID, _, err := cloudflare.LookupZone(client, args[0])
+			if err != nil {
+				return nil, err
+			}
+			return []string{fmt.Sprintf("zone:%s", zoneID)}, nil
+		}).
 		Build().
 		CobraRun(),
 }
@@ -61,10 +75,11 @@ func init() {
 	listCmd.Flags().StringVar(&recordContent, "content", "", "The content of the DNS record")
 	listCmd.Flags().BoolVarP(&allZones, "all", "A", false, "List records across all zones")
 	listCmd.Flags().BoolVarP(&compact, "compact", "c", false, "Display output in a compact table format")
+	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
 	DnsCmd.AddCommand(listCmd)
 }
 
-func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progress chan<- string) ([]RecordWithZone, error) {
+func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progress chan<- string) ([]types.DnsRecordWithZone, error) {
 	if allZones {
 		progress <- "Fetching list of all zones"
 		var zoneList []zones.Zone
@@ -76,7 +91,7 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 			return nil, fmt.Errorf("could not list zones: %w", err)
 		}
 
-		pool := pond.NewResultPool[[]RecordWithZone](10)
+		pool := pond.NewResultPool[[]types.DnsRecordWithZone](10)
 		group := pool.NewGroup()
 
 		totalZones := len(zoneList)
@@ -84,14 +99,14 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 
 		for _, zone := range zoneList {
 			zone := zone
-			group.SubmitErr(func() ([]RecordWithZone, error) {
+			group.SubmitErr(func() ([]types.DnsRecordWithZone, error) {
 				records, err := getRecordsForZone(client, zone.ID, zone.Name)
 				if err != nil {
 					return nil, err
 				}
-				recordsWithZone := make([]RecordWithZone, len(records))
+				recordsWithZone := make([]types.DnsRecordWithZone, len(records))
 				for i, r := range records {
-					recordsWithZone[i] = RecordWithZone{
+					recordsWithZone[i] = types.DnsRecordWithZone{
 						RecordResponse: r,
 						ZoneName:       zone.Name,
 					}
@@ -107,7 +122,7 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 			return nil, err
 		}
 
-		var allRecords []RecordWithZone
+		var allRecords []types.DnsRecordWithZone
 		for _, resultSlice := range nestedResults {
 			allRecords = append(allRecords, resultSlice...)
 		}
@@ -124,9 +139,9 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 	if err != nil {
 		return nil, err
 	}
-	recordsWithZone := make([]RecordWithZone, len(records))
+	recordsWithZone := make([]types.DnsRecordWithZone, len(records))
 	for i, r := range records {
-		recordsWithZone[i] = RecordWithZone{
+		recordsWithZone[i] = types.DnsRecordWithZone{
 			RecordResponse: r,
 			ZoneName:       zoneName,
 		}
@@ -160,7 +175,7 @@ func getRecordsForZone(client *cf.Client, zoneID, zoneName string) ([]dns.Record
 	return records.Result, nil
 }
 
-func printDnsRecords(records []RecordWithZone, fetchDuration time.Duration, err error) {
+func printDnsRecords(records []types.DnsRecordWithZone, fetchDuration time.Duration, err error) {
 	if err != nil {
 		fmt.Println(ui.ErrorMessage("Failed to list DNS records", err))
 		return
@@ -178,10 +193,10 @@ func printDnsRecords(records []RecordWithZone, fetchDuration time.Duration, err 
 	}
 
 	fmt.Println()
-	fmt.Println(ui.Success(fmt.Sprintf("Found %d DNS record(s) in %v", len(records), fetchDuration)))
+	fmt.Println(ui.Success(fmt.Sprintf("Found %d DNS record(s) %s", len(records), ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))))
 }
 
-func printDnsRecordsCompact(records []RecordWithZone) {
+func printDnsRecordsCompact(records []types.DnsRecordWithZone) {
 	termWidth, _, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		termWidth = 100
@@ -240,7 +255,7 @@ func printDnsRecordsCompact(records []RecordWithZone) {
 	fmt.Println(t)
 }
 
-func printDnsRecordsCards(records []RecordWithZone) {
+func printDnsRecordsCards(records []types.DnsRecordWithZone) {
 	fmt.Println(ui.Title("DNS Records"))
 	fmt.Println()
 
@@ -249,7 +264,7 @@ func printDnsRecordsCards(records []RecordWithZone) {
 	fmt.Println()
 
 	if allZones {
-		recordsByZone := make(map[string][]RecordWithZone)
+		recordsByZone := make(map[string][]types.DnsRecordWithZone)
 		for _, record := range records {
 			recordsByZone[record.ZoneName] = append(recordsByZone[record.ZoneName], record)
 		}
@@ -277,7 +292,7 @@ func printDnsRecordsCards(records []RecordWithZone) {
 	}
 }
 
-func renderRecordCard(record RecordWithZone) string {
+func renderRecordCard(record types.DnsRecordWithZone) string {
 	icb := response.NewItemContent().
 		Add("Name:", ui.Text(record.Name)).
 		Add("ID:", ui.Muted(record.ID)).

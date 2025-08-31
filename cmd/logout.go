@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"dario.lol/cf/internal/config"
+	"dario.lol/cf/internal/db"
 	"dario.lol/cf/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -37,5 +38,8 @@ func executeLogout(cmd *cobra.Command, args []string) {
 		println(ui.ErrorBox("Error saving config.", err))
 		os.Exit(1)
 	}
+
+	_ = db.InvalidateTags([]string{"user:whoami"})
+
 	println(ui.Success("You were successfully logged out."))
 }

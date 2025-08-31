@@ -77,5 +77,5 @@ func printDeleteZoneResult(zone *DeletedZoneInfo, duration time.Duration, err er
 		rb.Error("Error deleting zone", err).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully deleted zone %s (%s) in %v", zone.Name, zone.ID, duration).Display()
+	rb.FooterSuccess("Successfully deleted zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
 }

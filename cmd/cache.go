@@ -7,6 +7,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/cache"
@@ -82,5 +83,5 @@ func printPurgeResult(_ any, duration time.Duration, err error) {
 		rb.Error("Error purging cache", err).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully purged cache in %v", duration).Display()
+	rb.FooterSuccess("Successfully purged cache %s", ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
 }

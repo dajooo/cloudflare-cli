@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"dario.lol/cf/internal/config"
+	"dario.lol/cf/internal/db"
 	"dario.lol/cf/internal/prompt"
 	"dario.lol/cf/internal/ui"
 	"github.com/cloudflare/cloudflare-go/v6"
@@ -65,23 +66,20 @@ func checkCredentials(token, email, apiKey string) error {
 func handleArgs() bool {
 	if loginToken != "" {
 		err := checkCredentials(loginToken, "", "")
+		if err != nil {
+			println(ui.ErrorBox("Invalid credentials, could not log in.", err))
+			os.Exit(1)
+		}
 		config.Cfg.APIToken = config.EncryptedString(loginToken)
 		err = config.SaveConfig()
 		if err != nil {
 			println(ui.ErrorBox("Error saving config.", err))
 			os.Exit(1)
 		}
+		_ = db.InvalidateTags([]string{"user:whoami"})
 		return true
 	}
 	if loginApiKey != "" || loginEmail != "" {
-		if loginApiKey == "" {
-			println(ui.ErrorBox("Cloudflare api key is required"))
-			os.Exit(1)
-		}
-		if loginEmail == "" {
-			println(ui.ErrorBox("Cloudflare email is required"))
-			os.Exit(1)
-		}
 		err := checkCredentials("", loginEmail, loginApiKey)
 		if err == nil {
 			config.Cfg.APIEmail = loginEmail
@@ -91,6 +89,7 @@ func handleArgs() bool {
 				println(ui.ErrorBox("Error loading config.", err))
 				os.Exit(1)
 			}
+			_ = db.InvalidateTags([]string{"user:whoami"})
 			return true
 		}
 	}
@@ -118,7 +117,6 @@ func handleInput() {
 			println(ui.ErrorBox("Error saving config.", err))
 			os.Exit(1)
 		}
-		println(ui.Success("You were successfully logged in."))
 	}
 	if credentials.AuthMethod == prompt.LegacyAuthMethod {
 		config.Cfg.APIEmail = credentials.Email
@@ -128,6 +126,7 @@ func handleInput() {
 			println(ui.ErrorBox("Error saving config.", err))
 			os.Exit(1)
 		}
-		println(ui.Success("You were successfully logged in."))
 	}
+	_ = db.InvalidateTags([]string{"user:whoami"})
+	println(ui.Success("You were successfully logged in."))
 }

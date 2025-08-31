@@ -23,6 +23,9 @@ var listCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, []zones.Zone]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Fetching zones", fetchZones).
+		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+			return []string{"zones:list"}, nil
+		}).
 		Display(printZonesList).
 		Build().
 		CobraRun(),
@@ -43,13 +46,11 @@ func fetchZones(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string
 		params.Status.Value = zones.ZoneListParamsStatus(status)
 	}
 
-	// Always fetch the fresh list directly from the API.
 	zonesList, err := client.Zones.List(context.Background(), params)
 	if err != nil {
 		return nil, err
 	}
 
-	// After fetching, update the cache with the results to speed up future lookups.
 	for _, zone := range zonesList.Result {
 		cloudflare.SetID(cloudflare.ZoneCacheKey(zone.Name), zone.ID)
 		cloudflare.SetID(cloudflare.ZoneCacheKey(zone.ID), zone.Name)
@@ -85,7 +86,7 @@ func printZonesList(zonesList []zones.Zone, fetchDuration time.Duration, err err
 	}
 
 	if len(zonesList) > 0 {
-		rb.FooterSuccess("Found %d accessible zone(s) in %v", len(zonesList), fetchDuration)
+		rb.FooterSuccess("Found %d accessible zone(s) %s", len(zonesList), ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))
 	}
 
 	rb.Display()

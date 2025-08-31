@@ -19,11 +19,10 @@ import (
 var migrateCmd = &cobra.Command{
 	Use:    "migrate",
 	Short:  "Migrates legacy config and cache files to the new database format",
-	Hidden: true, // This command will not be shown in the help output.
+	Hidden: true,
 	Run:    executeMigrate,
 }
 
-// Structs to decode the old cache.json format
 type oldCacheEntry struct {
 	ID        string    `json:"id"`
 	Timestamp time.Time `json:"timestamp"`

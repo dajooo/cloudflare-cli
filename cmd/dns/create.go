@@ -8,6 +8,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
@@ -25,6 +26,9 @@ var createCmd = &cobra.Command{
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Creating DNS record", createDnsRecord).
 		Display(printCreateDnsResult).
+		Invalidates(func(cmd *cobra.Command, args []string, result *RecordInformation) []string {
+			return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+		}).
 		Build().
 		CobraRun(),
 }
@@ -100,5 +104,5 @@ func printCreateDnsResult(record *RecordInformation, duration time.Duration, err
 		rb.Error("Error creating DNS record", err).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully created DNS record %s (%s) in zone %s in %v", record.RecordName, record.RecordID, record.ZoneName, duration).Display()
+	rb.FooterSuccess("Successfully created DNS record %s (%s) in zone %s %s", record.RecordName, record.RecordID, record.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
 }

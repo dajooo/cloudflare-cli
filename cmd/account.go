@@ -25,6 +25,9 @@ var listCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, []accounts.Account]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Fetching accounts", fetchAccounts).
+		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+			return []string{"accounts:list"}, nil
+		}).
 		Display(printAccountsList).
 		Build().
 		CobraRun(),
@@ -82,7 +85,7 @@ func printAccountsList(accountsList []accounts.Account, fetchDuration time.Durat
 	}
 
 	if len(accountsList) > 0 {
-		rb.FooterSuccess("Found %d accessible account(s) in %v", len(accountsList), fetchDuration)
+		rb.FooterSuccess("Found %d accessible account(s) %s", len(accountsList), ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))
 	}
 
 	rb.Display()

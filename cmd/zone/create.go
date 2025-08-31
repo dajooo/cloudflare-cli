@@ -2,10 +2,12 @@ package zone
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
@@ -55,5 +57,5 @@ func printCreateZoneResult(zone *zones.Zone, duration time.Duration, err error) 
 		rb.Error("Error creating zone", err).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully created zone %s (%s) in %v", zone.Name, zone.ID, duration).Display()
+	rb.FooterSuccess("Successfully created zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
 }

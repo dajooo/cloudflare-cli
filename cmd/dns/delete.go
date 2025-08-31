@@ -7,6 +7,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
@@ -20,6 +21,9 @@ var deleteCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Deleting DNS record", deleteDnsRecord).
+		Invalidates(func(cmd *cobra.Command, args []string, result *RecordInformation) []string {
+			return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+		}).
 		Display(printDeleteDnsResult).
 		Build().
 		CobraRun(),
@@ -63,5 +67,5 @@ func printDeleteDnsResult(deletedRecord *RecordInformation, duration time.Durati
 		rb.Error("Error deleting DNS record", err).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully deleted DNS record %s (%s) in zone %s in %v", deletedRecord.RecordName, deletedRecord.RecordID, deletedRecord.ZoneName, duration).Display()
+	rb.FooterSuccess("Successfully deleted DNS record %s (%s) in zone %s %s", deletedRecord.RecordName, deletedRecord.RecordID, deletedRecord.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
 }

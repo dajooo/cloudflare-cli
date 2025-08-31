@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var noCache bool
+
 var whoAmICmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Get current user",
@@ -22,11 +24,16 @@ var whoAmICmd = &cobra.Command{
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Fetching user information", fetchUser).
 		Display(printUserInfo).
+		SkipCache(noCache).
+		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+			return []string{"user:whoami"}, nil
+		}).
 		Build().
 		CobraRun(),
 }
 
 func init() {
+	whoAmICmd.Flags().BoolVar(&noCache, "no-cache", false, "Bypass the cache and fetch directly from the API")
 	rootCmd.AddCommand(whoAmICmd)
 }
 
@@ -107,6 +114,6 @@ func printUserInfo(user *user.UserGetResponse, fetchDuration time.Duration, err 
 		rb.AddItem("Beta Programs", ui.BulletList(betaItems))
 	}
 
-	rb.FooterSuccess("Authentication successful (took %v)", fetchDuration).
+	rb.FooterSuccess("Authentication successful %s", ui.Muted(fmt.Sprintf("(took %v)", fetchDuration))).
 		Display()
 }

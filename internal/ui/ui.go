@@ -14,38 +14,33 @@ import (
 	"golang.org/x/term"
 )
 
-// Colors Color Palette - Modern, subtle, accessible with dark/light mode support
 type Colors struct {
-	// Neutrals - adaptive grays
-	Gray50  lipgloss.AdaptiveColor // lightest background
-	Gray100 lipgloss.AdaptiveColor // subtle backgrounds
-	Gray200 lipgloss.AdaptiveColor // borders, dividers
-	Gray300 lipgloss.AdaptiveColor // disabled text
-	Gray400 lipgloss.AdaptiveColor // muted text
-	Gray500 lipgloss.AdaptiveColor // secondary text
-	Gray600 lipgloss.AdaptiveColor // primary text
-	Gray700 lipgloss.AdaptiveColor // headings
-	Gray800 lipgloss.AdaptiveColor // high contrast
-	Gray900 lipgloss.AdaptiveColor // darkest
+	Gray50  lipgloss.AdaptiveColor
+	Gray100 lipgloss.AdaptiveColor
+	Gray200 lipgloss.AdaptiveColor
+	Gray300 lipgloss.AdaptiveColor
+	Gray400 lipgloss.AdaptiveColor
+	Gray500 lipgloss.AdaptiveColor
+	Gray600 lipgloss.AdaptiveColor
+	Gray700 lipgloss.AdaptiveColor
+	Gray800 lipgloss.AdaptiveColor
+	Gray900 lipgloss.AdaptiveColor
 
-	// Primary - soft blue
 	Primary50  lipgloss.AdaptiveColor
 	Primary100 lipgloss.AdaptiveColor
 	Primary200 lipgloss.AdaptiveColor
 	Primary300 lipgloss.AdaptiveColor
 	Primary400 lipgloss.AdaptiveColor
-	Primary500 lipgloss.AdaptiveColor // main brand
+	Primary500 lipgloss.AdaptiveColor
 	Primary600 lipgloss.AdaptiveColor
 	Primary700 lipgloss.AdaptiveColor
 
-	// Semantic colors
 	Success lipgloss.AdaptiveColor
 	Warning lipgloss.AdaptiveColor
 	Error   lipgloss.AdaptiveColor
 }
 
 var C = Colors{
-	// Neutrals - inverted for dark mode
 	Gray50:  lipgloss.AdaptiveColor{Light: "#fafbfc", Dark: "#0d1117"},
 	Gray100: lipgloss.AdaptiveColor{Light: "#f4f6f8", Dark: "#161b22"},
 	Gray200: lipgloss.AdaptiveColor{Light: "#e1e8ed", Dark: "#21262d"},
@@ -57,7 +52,6 @@ var C = Colors{
 	Gray800: lipgloss.AdaptiveColor{Light: "#1a2027", Dark: "#f4f6f8"},
 	Gray900: lipgloss.AdaptiveColor{Light: "#0d1117", Dark: "#fafbfc"},
 
-	// Primary - adjusted brightness for dark mode
 	Primary50:  lipgloss.AdaptiveColor{Light: "#f0f7ff", Dark: "#0c1821"},
 	Primary100: lipgloss.AdaptiveColor{Light: "#d9eaff", Dark: "#1a2332"},
 	Primary200: lipgloss.AdaptiveColor{Light: "#b3d9ff", Dark: "#2d3748"},
@@ -67,33 +61,29 @@ var C = Colors{
 	Primary600: lipgloss.AdaptiveColor{Light: "#0066cc", Dark: "#2c5282"},
 	Primary700: lipgloss.AdaptiveColor{Light: "#004d99", Dark: "#2a4365"},
 
-	// Semantic colors
 	Success: lipgloss.AdaptiveColor{Light: "#16a34a", Dark: "#22c55e"},
 	Warning: lipgloss.AdaptiveColor{Light: "#d97706", Dark: "#f59e0b"},
 	Error:   lipgloss.AdaptiveColor{Light: "#dc2626", Dark: "#ef4444"},
 }
 
-// Symbols - subtle, modern Unicode characters
 type Symbols struct {
-	// Navigation & State
-	ArrowRight string // →
-	ArrowDown  string // ↓
-	ArrowUp    string // ↑
-	Check      string // ✓
-	Cross      string // ✗
-	Dot        string // •
-	Circle     string // ○
-	Dash       string // –
+	ArrowRight string
+	ArrowDown  string
+	ArrowUp    string
+	Check      string
+	Cross      string
+	Dot        string
+	Circle     string
+	Dash       string
 
-	// UI Elements
-	CornerTL string // ╭
-	CornerTR string // ╮
-	CornerBL string // ╰
-	CornerBR string // ╯
-	Line     string // ─
-	Pipe     string // │
-	Branch   string // ├
-	End      string // └
+	CornerTL string
+	CornerTR string
+	CornerBL string
+	CornerBR string
+	Line     string
+	Pipe     string
+	Branch   string
+	End      string
 	Spinner  []string
 }
 
@@ -118,9 +108,7 @@ var S = Symbols{
 	Spinner:  []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 }
 
-// Typography - consistent text styles
 var (
-	// Display text
 	H1 = lipgloss.NewStyle().
 		Foreground(C.Gray800).
 		Bold(true).
@@ -136,7 +124,6 @@ var (
 		Bold(false).
 		MarginBottom(1)
 
-	// Body text
 	Body = lipgloss.NewStyle().
 		Foreground(C.Gray700)
 
@@ -146,12 +133,10 @@ var (
 	BodySmall = lipgloss.NewStyle().
 			Foreground(C.Gray500)
 
-	// Interactive elements
 	Link = lipgloss.NewStyle().
 		Foreground(C.Primary500).
 		Underline(true)
 
-	// Code and monospace
 	Code = lipgloss.NewStyle().
 		Foreground(C.Gray700).
 		Background(C.Gray100).
@@ -164,9 +149,7 @@ var (
 			MarginBottom(1)
 )
 
-// Component Styles
 var (
-	// Buttons
 	ButtonPrimary = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#000000"}).
 			Background(C.Primary500).
@@ -185,7 +168,6 @@ var (
 			Padding(0, 1).
 			Margin(0, 1)
 
-	// Cards and containers
 	Card = lipgloss.NewStyle().
 		Background(C.Gray50).
 		BorderStyle(lipgloss.NormalBorder()).
@@ -198,7 +180,6 @@ var (
 		Padding(1, 2).
 		MarginBottom(1)
 
-	// Status indicators
 	StatusSuccess = lipgloss.NewStyle().
 			Foreground(C.Success).
 			Bold(true)
@@ -211,7 +192,6 @@ var (
 			Foreground(C.Error).
 			Bold(true)
 
-	// Badges
 	Badge = lipgloss.NewStyle().
 		Background(C.Gray200).
 		Foreground(C.Gray700).
@@ -228,7 +208,6 @@ var (
 			Padding(0, 1)
 )
 
-// Layout utilities
 var (
 	Container = lipgloss.NewStyle().
 			Padding(1, 2)
@@ -246,7 +225,6 @@ var (
 		AlignHorizontal(lipgloss.Right)
 )
 
-// Helper functions for common patterns
 func Title(text string) string {
 	return H1.Render(text)
 }
@@ -285,16 +263,12 @@ func Info(text string) string {
 		Render("ⓘ " + text)
 }
 
-// ErrorMessage displays a formatted error with title and optional error details
 func ErrorMessage(title string, err ...error) string {
 	var b strings.Builder
 
-	// Error title with icon
 	b.WriteString(StatusError.Render(S.Cross + " " + title))
 
-	// Add error details if provided
 	if len(err) > 0 && err[0] != nil {
-		// Try to extract a clean error message
 		errorMsg := cleanErrorMessage(err[0].Error())
 		if errorMsg != "" {
 			b.WriteString("\n")
@@ -305,26 +279,37 @@ func ErrorMessage(title string, err ...error) string {
 	return b.String()
 }
 
-// ErrorBox displays an error in a bordered box for emphasis
+func WarningMessage(title string, err ...error) string {
+	var b strings.Builder
+
+	b.WriteString(StatusWarning.Render("⚠ " + title))
+
+	if len(err) > 0 && err[0] != nil {
+		errorMsg := cleanErrorMessage(err[0].Error())
+		if errorMsg != "" {
+			b.WriteString("\n")
+			b.WriteString(BodyMuted.Render(errorMsg))
+		}
+	}
+
+	return b.String()
+}
+
 func ErrorBox(title string, err ...error) string {
 	content := ErrorMessage(title, err...)
 	return Box(content)
 }
 
-// cleanErrorMessage extracts a user-friendly error message from technical errors
 func cleanErrorMessage(errStr string) string {
-	// Handle HTTP API errors with JSON responses
 	if strings.Contains(errStr, `"message":`) {
-		// Try to extract the message field from JSON-like error
 		if start := strings.Index(errStr, `"message":"`); start != -1 {
-			start += 11 // len(`"message":"`)
+			start += 11
 			if end := strings.Index(errStr[start:], `"`); end != -1 {
 				return errStr[start : start+end]
 			}
 		}
 	}
 
-	// Handle common HTTP errors
 	if strings.Contains(errStr, "400 Bad Request") {
 		return "Invalid request - please check your credentials"
 	}
@@ -350,7 +335,6 @@ func cleanErrorMessage(errStr string) string {
 		return "Cannot connect to server - please check your network"
 	}
 
-	// Handle credential-related errors
 	if strings.Contains(strings.ToLower(errStr), "invalid") &&
 		(strings.Contains(strings.ToLower(errStr), "token") ||
 			strings.Contains(strings.ToLower(errStr), "key") ||
@@ -358,11 +342,9 @@ func cleanErrorMessage(errStr string) string {
 		return "Invalid credentials - please check your API token or key"
 	}
 
-	// Return original if it's already clean
 	return errStr
 }
 
-// List helpers
 func BulletList(items []string) string {
 	var b strings.Builder
 	for _, item := range items {
@@ -379,7 +361,6 @@ func NumberedList(items []string) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// Progress indicators
 func ProgressBar(current, total int, width int) string {
 	if width <= 0 {
 		width = 20
@@ -398,7 +379,6 @@ func ProgressBar(current, total int, width int) string {
 		BodyMuted.Render(fmt.Sprintf("%d/%d", current, total))
 }
 
-// Dividers
 func Divider(width int) string {
 	if width <= 0 {
 		width = 40
@@ -413,7 +393,7 @@ func DividerWithText(text string, width int) string {
 		width = 40
 	}
 
-	textLen := len(text) + 2 // Add spaces around text
+	textLen := len(text) + 2
 	lineLen := (width - textLen) / 2
 
 	if lineLen < 0 {
@@ -428,11 +408,9 @@ func DividerWithText(text string, width int) string {
 		lipgloss.NewStyle().Foreground(C.Gray200).Render(rightLine)
 }
 
-// Huh theme integration
 func HuhTheme() *huh.Theme {
 	theme := huh.ThemeBase()
 
-	// Focused styles
 	theme.Focused.Title = H2
 	theme.Focused.Description = BodyMuted
 	theme.Focused.ErrorMessage = StatusError
@@ -449,7 +427,6 @@ func HuhTheme() *huh.Theme {
 	theme.Focused.TextInput.Prompt = lipgloss.NewStyle().Foreground(C.Primary500)
 	theme.Focused.TextInput.Text = Body
 
-	// Blurred styles
 	theme.Blurred.Title = BodyMuted
 	theme.Blurred.Description = BodyMuted.Faint(true)
 	theme.Blurred.ErrorMessage = StatusError.Faint(true)
@@ -469,7 +446,6 @@ func HuhTheme() *huh.Theme {
 	return theme
 }
 
-// Textinput styling
 func StyledTextInput() textinput.Model {
 	ti := textinput.New()
 	ti.Prompt = ""
@@ -479,7 +455,6 @@ func StyledTextInput() textinput.Model {
 	return ti
 }
 
-// Spinner styling
 func StyledSpinner() spinner.Model {
 	s := spinner.New()
 	s.Spinner = spinner.Spinner{
@@ -583,7 +558,6 @@ func Confirm(prompt string) (bool, error) {
 	return confirmed, err
 }
 
-// FangTheme creates a fang.ColorScheme based on the UI color palette.
 func FangTheme() fang.ColorScheme {
 	errorFg := lipgloss.AdaptiveColor{Light: "#ffffff", Dark: "#1a2027"}
 

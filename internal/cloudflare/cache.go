@@ -15,7 +15,6 @@ func GetID(key string) (string, bool) {
 }
 
 func SetID(key, id string) {
-	// Errors are ignored for cache writes to not disrupt user operations.
 	_ = db.Set(db.CacheBucket, []byte(key), []byte(id))
 }
 

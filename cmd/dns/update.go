@@ -8,6 +8,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
@@ -19,14 +20,22 @@ var updateRecordType string
 var updateRecordContent string
 var updateProxied bool
 
+type updateResult struct {
+	Record *dns.RecordResponse
+	ZoneID string
+}
+
 var updateCmd = &cobra.Command{
 	Use:   "update <zone> <record_id>",
 	Short: "Updates an existing DNS record, identified by its ID",
 	Args:  cobra.ExactArgs(2),
-	Run: executor.NewBuilder[*cf.Client, *dns.RecordResponse]().
+	Run: executor.NewBuilder[*cf.Client, *updateResult]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Updating DNS record", updateDnsRecord).
 		Display(printUpdateDnsResult).
+		Invalidates(func(cmd *cobra.Command, args []string, result *updateResult) []string {
+			return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+		}).
 		Build().
 		CobraRun(),
 }
@@ -39,7 +48,7 @@ func init() {
 	DnsCmd.AddCommand(updateCmd)
 }
 
-func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*dns.RecordResponse, error) {
+func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*updateResult, error) {
 	zoneIdentifier := args[0]
 	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
@@ -92,14 +101,18 @@ func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<
 	if err != nil {
 		return nil, err
 	}
-	return record, nil
+
+	return &updateResult{
+		Record: record,
+		ZoneID: zoneID,
+	}, nil
 }
 
-func printUpdateDnsResult(record *dns.RecordResponse, duration time.Duration, err error) {
+func printUpdateDnsResult(result *updateResult, duration time.Duration, err error) {
 	rb := response.New()
 	if err != nil {
 		rb.Error("Error updating DNS record", err).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully updated DNS record %s (%s) in %v", record.Name, record.ID, duration).Display()
+	rb.FooterSuccess("Successfully updated DNS record %s (%s) %s", result.Record.Name, result.Record.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
 }
