@@ -1,7 +1,7 @@
 package constants
 
 const (
-	Version     = "v0.1.4"
+	Version     = "v0.2.0"
 	ProjectURL  = "https://github.com/dajooo/cloudflare-cli"
 	ServiceName = "cloudflare-cli"
 )
