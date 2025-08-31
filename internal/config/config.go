@@ -2,11 +2,8 @@ package config
 
 import (
 	"errors"
-	"os"
-	"path"
 
-	"github.com/go-viper/mapstructure/v2"
-	"github.com/spf13/viper"
+	"dario.lol/cf/internal/db"
 )
 
 type Config struct {
@@ -15,44 +12,36 @@ type Config struct {
 	APIEmail string          `mapstructure:"api_email"`
 }
 
-var ErrNotLoggedIn = errors.New("either api_token or api_email and api_key must be set")
+var ErrNotLoggedIn = errors.New("you are not logged in. Please use 'cf login'")
 
 var Cfg Config
 
-func initViper() error {
-	home, err := os.UserHomeDir()
+func LoadConfig() error {
+	var newCfg Config
+
+	token, err := db.Get(db.ConfigBucket, []byte("api_token"))
 	if err != nil {
 		return err
 	}
-
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(path.Join(home, ".cloudflare-cli"))
-
-	viper.SetEnvPrefix("CF")
-	viper.AutomaticEnv()
-	_ = viper.BindEnv("api_token")
-	_ = viper.BindEnv("api_key")
-	_ = viper.BindEnv("api_email")
-
-	return nil
-}
-
-func LoadConfig() error {
-	if err := initViper(); err != nil {
+	if err := newCfg.APIToken.UnmarshalText(token); err != nil {
 		return err
 	}
 
-	if err := viper.ReadInConfig(); err != nil {
-		var notFound viper.ConfigFileNotFoundError
-		if !errors.As(err, &notFound) {
-			return err
-		}
-	}
-
-	if err := viper.Unmarshal(&Cfg, viper.DecodeHook(mapstructure.TextUnmarshallerHookFunc())); err != nil {
+	key, err := db.Get(db.ConfigBucket, []byte("api_key"))
+	if err != nil {
 		return err
 	}
+	if err := newCfg.APIKey.UnmarshalText(key); err != nil {
+		return err
+	}
+
+	email, err := db.Get(db.ConfigBucket, []byte("api_email"))
+	if err != nil {
+		return err
+	}
+	newCfg.APIEmail = string(email)
+
+	Cfg = newCfg
 
 	if Cfg.APIToken == "" && Cfg.APIEmail == "" && Cfg.APIKey == "" {
 		return ErrNotLoggedIn
@@ -61,20 +50,25 @@ func LoadConfig() error {
 }
 
 func SaveConfig() error {
-	if err := initViper(); err != nil {
+	tokenBytes, err := Cfg.APIToken.MarshalText()
+	if err != nil {
+		return err
+	}
+	if err := db.Set(db.ConfigBucket, []byte("api_token"), tokenBytes); err != nil {
 		return err
 	}
 
-	viper.Set("api_token", Cfg.APIToken)
-	viper.Set("api_key", Cfg.APIKey)
-	viper.Set("api_email", Cfg.APIEmail)
-
-	if err := viper.WriteConfig(); err != nil {
-		var notFound viper.ConfigFileNotFoundError
-		if errors.As(err, &notFound) {
-			return viper.SafeWriteConfig()
-		}
+	keyBytes, err := Cfg.APIKey.MarshalText()
+	if err != nil {
 		return err
 	}
+	if err := db.Set(db.ConfigBucket, []byte("api_key"), keyBytes); err != nil {
+		return err
+	}
+
+	if err := db.Set(db.ConfigBucket, []byte("api_email"), []byte(Cfg.APIEmail)); err != nil {
+		return err
+	}
+
 	return nil
 }

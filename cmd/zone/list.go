@@ -43,10 +43,18 @@ func fetchZones(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string
 		params.Status.Value = zones.ZoneListParamsStatus(status)
 	}
 
+	// Always fetch the fresh list directly from the API.
 	zonesList, err := client.Zones.List(context.Background(), params)
 	if err != nil {
 		return nil, err
 	}
+
+	// After fetching, update the cache with the results to speed up future lookups.
+	for _, zone := range zonesList.Result {
+		cloudflare.SetID(cloudflare.ZoneCacheKey(zone.Name), zone.ID)
+		cloudflare.SetID(cloudflare.ZoneCacheKey(zone.ID), zone.Name)
+	}
+
 	return zonesList.Result, nil
 }
 
