@@ -16,6 +16,7 @@ import (
 
 var accountID string
 var status string
+var noCache bool
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -23,6 +24,7 @@ var listCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, []zones.Zone]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Fetching zones", fetchZones).
+		SkipCache(noCache).
 		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
 			return []string{"zones:list"}, nil
 		}).
@@ -34,6 +36,7 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().StringVar(&accountID, "account-id", "", "The account ID to list zones for")
 	listCmd.Flags().StringVar(&status, "status", "", "The status of the zones to list (active, pending)")
+	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
 	ZoneCmd.AddCommand(listCmd)
 }
 

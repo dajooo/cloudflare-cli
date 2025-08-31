@@ -25,6 +25,7 @@ var listCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, []accounts.Account]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Fetching accounts", fetchAccounts).
+		SkipCache(noCache).
 		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
 			return []string{"accounts:list"}, nil
 		}).
@@ -34,6 +35,7 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
+	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
 	accountCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(accountCmd)
 }
