@@ -43,11 +43,11 @@ This tier represents the absolute essentials for a functional Cloudflare CLI.
         - **Description:** Creates a new DNS record.
         - **Flags:** `--ttl <seconds>`, `--proxied`.
         - **Example:** `cf dns create example.com www A 1.2.3.4 --proxied`
-    - [x] **`cf dns update <zone> <record_id>`**
+    - [x] **`cf dns update <zone> <record>`**
         - **Description:** Updates an existing DNS record, identified by its ID.
         - **Flags:** `--name`, `--type`, `--content`, `--proxied <true|false>`.
         - **Example:** `cf dns update example.com <id> --content 5.6.7.8`
-    - [x] **`cf dns delete <zone> <record_id>`**
+    - [x] **`cf dns delete <zone> <record>`**
         - **Description:** Deletes a DNS record.
         - **Example:** `cf dns delete example.com <id>`
 

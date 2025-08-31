@@ -15,7 +15,7 @@ import (
 )
 
 var deleteCmd = &cobra.Command{
-	Use:   "delete <zone> <record_id>",
+	Use:   "delete <zone> <record>",
 	Short: "Deletes a DNS record",
 	Args:  cobra.ExactArgs(2),
 	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().

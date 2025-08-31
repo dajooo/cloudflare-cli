@@ -26,7 +26,7 @@ type updateResult struct {
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update <zone> <record_id>",
+	Use:   "update <zone> <record>",
 	Short: "Updates an existing DNS record, identified by its ID",
 	Args:  cobra.ExactArgs(2),
 	Run: executor.NewBuilder[*cf.Client, *updateResult]().
