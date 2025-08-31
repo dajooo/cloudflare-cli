@@ -23,7 +23,7 @@ type Executor[S any, T any] struct {
 	setupMessage    string
 	setup           func() (S, error)
 	fetchingMessage string
-	fetch           func(setupResult S, cmd *cobra.Command, args []string) (T, error)
+	fetch           func(setupResult S, cmd *cobra.Command, args []string, progress chan<- string) (T, error)
 	display         func(data T, fetchDuration time.Duration, err error)
 }
 
@@ -56,10 +56,10 @@ func (e *Executor[S, T]) Execute() {
 		_ = writer.Flush()
 	}
 
-	fetchTask := func() (T, error) {
-		return e.fetch(setupResult, e.cmd, e.args)
+	fetchTask := func(progress chan<- string) (T, error) {
+		return e.fetch(setupResult, e.cmd, e.args, progress)
 	}
-	fetchResult, fetchDuration, fetchErr := runStage(writer, e.fetchingMessage, fetchTask)
+	fetchResult, fetchDuration, fetchErr := runStageWithProgress(writer, e.fetchingMessage, fetchTask)
 
 	fmt.Fprint(writer, ansiEraseLine)
 	_ = writer.Flush()
@@ -83,7 +83,7 @@ func (b *Builder[S, T]) Setup(message string, task func() (S, error)) *Builder[S
 	return b
 }
 
-func (b *Builder[S, T]) Fetch(message string, task func(S, *cobra.Command, []string) (T, error)) *Builder[S, T] {
+func (b *Builder[S, T]) Fetch(message string, task func(S, *cobra.Command, []string, chan<- string) (T, error)) *Builder[S, T] {
 	b.executor.fetchingMessage = message
 	b.executor.fetch = task
 	return b
@@ -130,6 +130,42 @@ func runStage[T any](writer *bufio.Writer, message string, task func() (T, error
 				_ = cmd()
 			}
 			fmt.Fprintf(writer, "\r%s %s...", s.View(), message)
+			_ = writer.Flush()
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+}
+
+func runStageWithProgress[T any](writer *bufio.Writer, initialMessage string, task func(progress chan<- string) (T, error)) (T, time.Duration, error) {
+	s := ui.StyledSpinner()
+	resultChan := make(chan result[T], 1)
+	progressChan := make(chan string)
+	currentMessage := initialMessage
+
+	go func() {
+		start := time.Now()
+		res, err := task(progressChan)
+		duration := time.Since(start)
+		close(progressChan) // Signal that no more progress messages will be sent
+		resultChan <- result[T]{res: res, err: err, duration: duration}
+	}()
+
+	for {
+		select {
+		case res := <-resultChan:
+			return res.res, res.duration, res.err
+		case msg, ok := <-progressChan:
+			if ok {
+				fmt.Fprint(writer, ansiEraseLine)
+				currentMessage = msg
+			}
+		default:
+			var cmd tea.Cmd
+			s, cmd = s.Update(spinner.Tick())
+			if cmd != nil {
+				_ = cmd()
+			}
+			fmt.Fprintf(writer, "\r%s %s...", s.View(), currentMessage)
 			_ = writer.Flush()
 			time.Sleep(50 * time.Millisecond)
 		}

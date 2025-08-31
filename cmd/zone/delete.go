@@ -8,6 +8,7 @@ import (
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
+	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
 	"github.com/spf13/cobra"
@@ -46,18 +47,12 @@ func executeZoneDelete(cmd *cobra.Command, args []string) {
 	executor.NewBuilder[*cf.Client, *DeletedZoneInfo]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Deleting zone", deleteZone).
-		Display(func(zone *DeletedZoneInfo, duration time.Duration, err error) {
-			if err != nil {
-				fmt.Println(ui.ErrorMessage("Error deleting zone", err))
-				return
-			}
-			fmt.Println(ui.Success(fmt.Sprintf("Successfully deleted zone %s (%s) in %v", zone.Name, zone.ID, duration)))
-		}).
+		Display(printDeleteZoneResult).
 		Build().
 		CobraRun()(cmd, args)
 }
 
-func deleteZone(client *cf.Client, _ *cobra.Command, args []string) (*DeletedZoneInfo, error) {
+func deleteZone(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*DeletedZoneInfo, error) {
 	zoneIdentifier := args[0]
 
 	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
@@ -74,4 +69,13 @@ func deleteZone(client *cf.Client, _ *cobra.Command, args []string) (*DeletedZon
 		ID:   zoneID,
 		Name: zoneName,
 	}, nil
+}
+
+func printDeleteZoneResult(zone *DeletedZoneInfo, duration time.Duration, err error) {
+	rb := response.New()
+	if err != nil {
+		rb.Error("Error deleting zone", err).Display()
+		return
+	}
+	rb.FooterSuccess("Successfully deleted zone %s (%s) in %v", zone.Name, zone.ID, duration).Display()
 }

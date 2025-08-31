@@ -8,7 +8,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
-	"dario.lol/cf/internal/ui"
+	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
 	"github.com/spf13/cobra"
@@ -24,18 +24,18 @@ var createCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Creating DNS record", createDnsRecord).
-		Display(func(record *RecordInformation, duration time.Duration, err error) {
-			if err != nil {
-				fmt.Println(ui.ErrorMessage("Error deleting DNS record", err))
-				return
-			}
-			fmt.Println(ui.Success(fmt.Sprintf("Successfully created DNS record %s.%s (%s)", record.RecordName, record.ZoneName, record.RecordID)))
-		}).
+		Display(printCreateDnsResult).
 		Build().
 		CobraRun(),
 }
 
-func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string) (*RecordInformation, error) {
+func init() {
+	createCmd.Flags().IntVar(&ttl, "ttl", 1, "The TTL of the DNS record")
+	createCmd.Flags().BoolVar(&proxied, "proxied", false, "Whether the DNS record should be proxied")
+	DnsCmd.AddCommand(createCmd)
+}
+
+func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*RecordInformation, error) {
 	zoneIdentifier := args[0]
 	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
@@ -94,8 +94,11 @@ func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string) (*Recor
 	}, nil
 }
 
-func init() {
-	createCmd.Flags().IntVar(&ttl, "ttl", 1, "The TTL of the DNS record")
-	createCmd.Flags().BoolVar(&proxied, "proxied", false, "Whether the DNS record should be proxied")
-	DnsCmd.AddCommand(createCmd)
+func printCreateDnsResult(record *RecordInformation, duration time.Duration, err error) {
+	rb := response.New()
+	if err != nil {
+		rb.Error("Error creating DNS record", err).Display()
+		return
+	}
+	rb.FooterSuccess("Successfully created DNS record %s (%s) in zone %s in %v", record.RecordName, record.RecordID, record.ZoneName, duration).Display()
 }

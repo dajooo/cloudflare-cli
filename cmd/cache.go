@@ -7,7 +7,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
-	"dario.lol/cf/internal/ui"
+	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/cache"
 	"github.com/spf13/cobra"
@@ -24,13 +24,7 @@ var cachePurgeCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, any]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Purging cache", purgeCache).
-		Display(func(_ any, duration time.Duration, err error) {
-			if err != nil {
-				fmt.Println(ui.ErrorMessage("Error purging cache", err))
-				return
-			}
-			fmt.Println(ui.Success(fmt.Sprintf("Successfully purged cache in %v", duration)))
-		}).
+		Display(printPurgeResult).
 		Build().
 		CobraRun(),
 }
@@ -49,7 +43,7 @@ func init() {
 	rootCmd.AddCommand(cacheCmd)
 }
 
-func purgeCache(client *cf.Client, _ *cobra.Command, _ []string) (any, error) {
+func purgeCache(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string) (any, error) {
 	if zoneIdentifier == "" {
 		return nil, fmt.Errorf("the --zone flag is required")
 	}
@@ -80,4 +74,13 @@ func purgeCache(client *cf.Client, _ *cobra.Command, _ []string) (any, error) {
 
 	_, err = client.Cache.Purge(context.Background(), params)
 	return nil, err
+}
+
+func printPurgeResult(_ any, duration time.Duration, err error) {
+	rb := response.New()
+	if err != nil {
+		rb.Error("Error purging cache", err).Display()
+		return
+	}
+	rb.FooterSuccess("Successfully purged cache in %v", duration).Display()
 }

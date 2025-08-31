@@ -8,7 +8,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
-	"dario.lol/cf/internal/ui"
+	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/dns"
 	"github.com/spf13/cobra"
@@ -26,13 +26,7 @@ var updateCmd = &cobra.Command{
 	Run: executor.NewBuilder[*cf.Client, *dns.RecordResponse]().
 		Setup("Decrypting configuration", cloudflare.NewClient).
 		Fetch("Updating DNS record", updateDnsRecord).
-		Display(func(record *dns.RecordResponse, duration time.Duration, err error) {
-			if err != nil {
-				fmt.Println(ui.ErrorMessage("Error updating DNS record", err))
-				return
-			}
-			fmt.Println(ui.Success(fmt.Sprintf("Successfully updated DNS record %s (%s) in %v", record.Name, record.ID, duration)))
-		}).
+		Display(printUpdateDnsResult).
 		Build().
 		CobraRun(),
 }
@@ -45,7 +39,7 @@ func init() {
 	DnsCmd.AddCommand(updateCmd)
 }
 
-func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string) (*dns.RecordResponse, error) {
+func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*dns.RecordResponse, error) {
 	zoneIdentifier := args[0]
 	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
 	if err != nil {
@@ -99,4 +93,13 @@ func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string) (*dns.R
 		return nil, err
 	}
 	return record, nil
+}
+
+func printUpdateDnsResult(record *dns.RecordResponse, duration time.Duration, err error) {
+	rb := response.New()
+	if err != nil {
+		rb.Error("Error updating DNS record", err).Display()
+		return
+	}
+	rb.FooterSuccess("Successfully updated DNS record %s (%s) in %v", record.Name, record.ID, duration).Display()
 }

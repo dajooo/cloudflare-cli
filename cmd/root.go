@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"dario.lol/cf/internal/constants"
@@ -24,7 +25,7 @@ func configureColorScheme(_ lipgloss.LightDarkFunc) fang.ColorScheme {
 }
 
 func Execute() {
-	if err := fang.Execute(context.Background(), rootCmd, fang.WithColorSchemeFunc(configureColorScheme), fang.WithVersion(constants.Version)); err != nil {
+	if err := fang.Execute(context.Background(), rootCmd, fang.WithErrorHandler(func(w io.Writer, styles fang.Styles, err error) {}), fang.WithColorSchemeFunc(configureColorScheme), fang.WithVersion(constants.Version)); err != nil {
 		println(ui.ErrorBox("Error executing command", err))
 		os.Exit(1)
 	}
