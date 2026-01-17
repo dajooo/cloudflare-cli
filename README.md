@@ -27,7 +27,7 @@ go install dario.lol/cf@latest
 
 ### From Binaries
 
-Pre-compiled binaries for various operating systems will be available on the [Releases](https://www.google.com/search?q=https://github.com/dajooo/cloudflare-cli/releases) page.
+Pre-compiled binaries for various operating systems will be available on the [Releases](https://github.com/dajooo/cloudflare-cli/releases) page.
 
 ## Usage
 
@@ -40,6 +40,24 @@ cf login
 ```
 
 The CLI will prompt you for your preferred authentication method and credentials. Your token will be securely stored in your system's keyring.
+
+### Required Permissions
+
+To use all features of this CLI (including future updates), we recommend the following permissions. Code marked with `*` is for planned features.
+
+-   **Zone / Zone**: Read (Edit required for `create`/`delete`)
+-   **Zone / DNS**: Edit
+-   **Zone / Cache Purge**: Purge
+-   **Zone / SSL and Certificates**: Edit
+-   **Zone / Zone Settings**: Read (Edit required for SSL/TLS settings)
+-   **Zone / Firewall Services**: Edit *
+-   **Account / Account Settings**: Read
+-   **Account / Workers Scripts**: Edit *
+-   **Account / Cloudflare Pages**: Edit *
+-   **User / User Details**: Read
+
+> [!NOTE]
+> **User** permissions are only accessible on User API Tokens, not on Account-bound API Tokens.
 
 ### 2\. General Commands
 
@@ -69,6 +87,12 @@ cf dns create example.com www A 1.2.3.4 --proxied
 
 # Purge the entire cache for a zone
 cf cache purge --zone example.com --all
+
+# Get current SSL mode
+cf ssl get example.com
+
+# Set SSL mode
+cf ssl set example.com full
 ```
 
 For a full list of commands and options, use the `--help` flag:
@@ -106,6 +130,6 @@ Contributions are welcome\! Please feel free to open an issue or submit a pull r
 
 ## 📄 License
 
-This project is licensed under the MIT License. See the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ```

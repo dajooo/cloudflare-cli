@@ -61,9 +61,9 @@ This tier represents the absolute essentials for a functional Cloudflare CLI.
 
 ### Tier 2: Comprehensive Functionality
 
-- [ ] **SSL/TLS Management**
-    - [ ] **`cf ssl get <zone>`**: Retrieves the current SSL/TLS encryption mode.
-    - [ ] **`cf ssl set <zone> <flexible|full|strict|off>`**: Sets the SSL/TLS encryption mode for a zone.
+- [x] **SSL/TLS Management**
+    - [x] **`cf ssl get <zone>`**: Retrieves the current SSL/TLS encryption mode.
+    - [x] **`cf ssl set <zone> <flexible|full|strict|off>`**: Sets the SSL/TLS encryption mode for a zone.
 
 - [ ] **Firewall Rules**
     - [ ] **`cf firewall list <zone>`**: Lists all firewall rules for a zone.
