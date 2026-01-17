@@ -7,19 +7,13 @@ import (
 	"io"
 
 	"dario.lol/cf/internal/constants"
-	password2 "dario.lol/gotils/pkg/password"
 	"filippo.io/age"
 	"github.com/zalando/go-keyring"
 )
 
-func Encrypt(data []byte, password string) ([]byte, error) {
-	recipient, err := age.NewScryptRecipient(password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create recipient: %w", err)
-	}
-
+func Encrypt(data []byte, recipients ...age.Recipient) ([]byte, error) {
 	var encrypted bytes.Buffer
-	w, err := age.Encrypt(&encrypted, recipient)
+	w, err := age.Encrypt(&encrypted, recipients...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create encrypted writer: %w", err)
 	}
@@ -33,13 +27,8 @@ func Encrypt(data []byte, password string) ([]byte, error) {
 	return encrypted.Bytes(), nil
 }
 
-func Decrypt(encryptedData []byte, password string) ([]byte, error) {
-	identity, err := age.NewScryptIdentity(password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	r, err := age.Decrypt(bytes.NewReader(encryptedData), identity)
+func Decrypt(encryptedData []byte, identities ...age.Identity) ([]byte, error) {
+	r, err := age.Decrypt(bytes.NewReader(encryptedData), identities...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Decrypt data: %w", err)
 	}
@@ -52,22 +41,39 @@ func Decrypt(encryptedData []byte, password string) ([]byte, error) {
 	return decrypted, nil
 }
 
-func GetOrStoreNewlyGeneratedPassword() (string, error) {
-	password, err := keyring.Get(constants.ServiceName, "user")
+func GetOrGenerateX25519Identity() (*age.X25519Identity, error) {
+	identityStr, err := keyring.Get(constants.ServiceName, "identity")
 	if err == nil {
-		return password, nil
+		return age.ParseX25519Identity(identityStr)
 	}
 	if !errors.Is(err, keyring.ErrNotFound) {
-		return "", fmt.Errorf("failed to get password from keyring: %w", err)
+		return nil, fmt.Errorf("failed to get identity from keyring: %w", err)
 	}
 
-	password, err = password2.Generate(password2.GenerateWithLengthOption(64))
+	identity, err := age.GenerateX25519Identity()
 	if err != nil {
-		return "", fmt.Errorf("failed to generate password: %w", err)
+		return nil, fmt.Errorf("failed to generate identity: %w", err)
 	}
-	err = keyring.Set(constants.ServiceName, "user", password)
+
+	err = keyring.Set(constants.ServiceName, "identity", identity.String())
 	if err != nil {
-		return "", fmt.Errorf("failed to set password in keyring: %w", err)
+		return nil, fmt.Errorf("failed to set identity in keyring: %w", err)
 	}
-	return password, nil
+	return identity, nil
+}
+
+func GetLegacyScryptIdentity() (*age.ScryptIdentity, error) {
+	password, err := keyring.Get(constants.ServiceName, "user")
+	if err != nil {
+		if errors.Is(err, keyring.ErrNotFound) {
+			return nil, nil // No legacy identity found
+		}
+		return nil, fmt.Errorf("failed to get password from keyring: %w", err)
+	}
+
+	identity, err := age.NewScryptIdentity(password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create scrypt identity: %w", err)
+	}
+	return identity, nil
 }
