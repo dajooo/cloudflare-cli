@@ -63,7 +63,6 @@ func (b *Builder) Display() {
 
 	if b.title != "" {
 		fmt.Println(ui.Title(b.title))
-		fmt.Println()
 	}
 
 	if len(b.summary) > 0 {

@@ -94,10 +94,10 @@ This tier represents the absolute essentials for a functional Cloudflare CLI.
     - [ ] **`cf lb list/create`**: Manages Load Balancers. **(Enterprise Feature)**
     - [ ] **`cf argo get/set <zone>`**: Manages Argo Smart Routing. **(Add-on Feature)**
 
-- [ ] **Full Developer Platform**
-    - [ ] **R2**: `cf r2 bucket create/list`, `cf r2 object put/get <bucket> <key>`.
-    - [ ] **D1**: `cf d1 create <name>`, `cf d1 exec <name> --query "..."`.
-    - [ ] **KV**: `cf kv namespace create/list`, `cf kv key put/get <namespace> <key>`.
+- [x] **Full Developer Platform**
+    - [x] **R2**: `cf r2 bucket create/list`. (Object put/get via S3 compatible client recommended)
+    - [x] **D1**: `cf d1 create <name>`, `cf d1 exec <name> -- "..."`, `cf d1 bind <name> --to <project>`.
+    - [x] **KV**: `cf kv namespace create/list`, `cf kv key put/get <namespace> <key>`.
 
 - [ ] **Monitoring & Logs**
     - [ ] **`cf logs tail <zone>`**: Live-streams HTTP request logs from the edge. **(Enterprise Feature)**

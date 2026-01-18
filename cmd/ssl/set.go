@@ -46,7 +46,6 @@ func setSSL(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string)
 		return nil, fmt.Errorf("error finding zone: %s", err)
 	}
 
-	// Update zone settings
 	settings, err := client.Zones.Settings.Edit(context.Background(), "ssl", zones.SettingEditParams{
 		ZoneID: cf.F(zoneID),
 		Body: zones.SettingEditParamsBody{

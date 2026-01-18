@@ -52,8 +52,11 @@ To use all features of this CLI (including future updates), we recommend the fol
 -   **Zone / Zone Settings**: Read (Edit required for SSL/TLS settings)
 -   **Zone / Firewall Services**: Edit *
 -   **Account / Account Settings**: Read
--   **Account / Workers Scripts**: Edit *
--   **Account / Cloudflare Pages**: Edit *
+-   **Account / Workers Scripts**: Edit
+-   **Account / Cloudflare Pages**: Edit
+-   **Account / Workers R2 Storage**: Edit
+-   **Account / D1**: Edit
+-   **Account / Workers KV Storage**: Edit
 -   **User / User Details**: Read
 
 > [!NOTE]
@@ -93,6 +96,34 @@ cf ssl get example.com
 
 # Set SSL mode
 cf ssl set example.com full
+```
+
+### 3. Developer Platform
+
+Manage your Workers, Pages, R2, D1, and KV resources.
+
+```sh
+# Workers (Coming Soon: Deploy)
+cf workers --help
+
+# R2 Buckets
+cf r2 bucket list
+cf r2 bucket create my-bucket
+cf r2 bind my-bucket --to my-pages-project --name BUCKET
+
+# D1 Databases
+cf d1 create my-db
+cf d1 list
+cf d1 exec my-db -- "SELECT * FROM users"
+cf d1 bind my-db --to my-pages-project --name DB
+
+# KV Namespaces & Keys
+cf kv namespace create "My App KV"
+cf kv namespace list
+cf kv bind "My App KV" --to my-pages-project --name KV
+cf kv key put my-key "some value" --namespace-id <id>
+cf kv key put my-key "some value" --namespace-id <id>
+cf kv key get my-key --namespace-id <id>
 ```
 
 For a full list of commands and options, use the `--help` flag:

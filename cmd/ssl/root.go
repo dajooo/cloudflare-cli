@@ -8,7 +8,3 @@ var SslCmd = &cobra.Command{
 	Use:   "ssl",
 	Short: "Manage SSL/TLS encryption modes",
 }
-
-func init() {
-	// Subcommands will register themselves
-}
