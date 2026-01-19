@@ -65,8 +65,6 @@
     - **Description:** Creates a D1 SQL database.
 - [x] **`cf d1 exec <name> -- "<query>"`** `[Free]`
     - **Description:** Executes a SQL query against D1.
-- [ ] **`cf d1 backup create <name>`** `[Free]`
-    - **Description:** Manually triggers a database backup.
 - [ ] **`cf queue create <name>`** `[Add-on]`
     - **Description:** Create a message queue (Requires Workers Paid).
 
@@ -95,7 +93,7 @@
     - **Description:** Updates an existing DNS record.
 - [x] **`cf dns delete <zone> <record>`** `[Free]`
     - **Description:** Deletes a DNS record.
-- [ ] **`cf cache purge`** `[Free]`
+- [x] **`cf cache purge`** `[Free]`
     - **Description:** Purges cache.
     - **Flags:** `--zone`, `--all`, `--files`, `--tags`.
 - [ ] **`cf lb list`** `[Add-on]`
@@ -116,9 +114,9 @@
     - **Description:** Sets SSL mode (off, flexible, full, strict).
 - [ ] **`cf ssl custom upload <zone>`** `[Biz]`
     - **Description:** Upload custom SSL certificates.
-- [ ] **`cf firewall list <zone>`** `[Free]`
-    - **Description:** Lists all firewall rules.
-- [ ] **`cf firewall create <zone>`** `[Free]`
+- [ ] **`cf waf list <zone>`** `[Free]`
+    - **Description:** Lists all WAF rules.
+- [ ] **`cf waf create <zone>`** `[Free]`
     - **Description:** Creates a new WAF rule.
     - **Flags:** `--expression`, `--action`, `--description`.
 - [ ] **`cf rate-limit create <zone>`** `[Free/Add-on]`

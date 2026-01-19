@@ -119,9 +119,7 @@ func printUserInfo(ctx *executor.Context) {
 
 	if len(user.Betas) > 0 {
 		betaItems := make([]string, len(user.Betas))
-		for i, beta := range user.Betas {
-			betaItems[i] = beta
-		}
+		copy(betaItems, user.Betas)
 		rb.AddItem("Beta Programs", ui.BulletList(betaItems))
 	}
 

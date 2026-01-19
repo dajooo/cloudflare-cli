@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/flags"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
@@ -21,11 +21,16 @@ var deleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: executor.New().
 		WithClient().
+		WithZone().
+		WithDNSRecord().
+		WithConfirmationFunc(func(ctx *executor.Context) string {
+			return fmt.Sprintf("Are you sure you want to delete DNS record %s (%s) in zone %s (%s)?", executor.Get(ctx, executor.RecordNameKey), executor.Get(ctx, executor.RecordIDKey), executor.Get(ctx, executor.ZoneNameKey), executor.Get(ctx, executor.ZoneIDKey))
+		}).
 		Step(executor.NewStep(deletedRecordKey, "Deleting DNS record").Func(deleteDnsRecord)).
 		Invalidates(func(ctx *executor.Context) []string {
-			record := executor.Get(ctx, deletedRecordKey)
-			if record != nil {
-				return []string{fmt.Sprintf("zone:%s", record.ZoneID)}
+			zoneID := executor.Get(ctx, executor.ZoneIDKey)
+			if zoneID != "" {
+				return []string{fmt.Sprintf("zone:%s", zoneID)}
 			}
 			return nil
 		}).
@@ -34,23 +39,14 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
+	flags.RegisterConfirmation(deleteCmd)
 	DnsCmd.AddCommand(deleteCmd)
 }
 
 func deleteDnsRecord(ctx *executor.Context, _ chan<- string) (*RecordInformation, error) {
-	zoneIdentifier := ctx.Args[0]
-	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
-	if err != nil {
-		return nil, fmt.Errorf("error finding zone: %s", err)
-	}
-
-	recordIdentifier := ctx.Args[1]
-	recordID, err := cloudflare.LookupDNSRecordID(ctx.Client, zoneID, zoneName, recordIdentifier)
-	if err != nil {
-		return nil, fmt.Errorf("error finding record: %s", err)
-	}
-
-	_, err = ctx.Client.DNS.Records.Delete(context.Background(), recordID, dns.RecordDeleteParams{
+	recordID := executor.Get(ctx, executor.RecordIDKey)
+	zoneID := executor.Get(ctx, executor.ZoneIDKey)
+	_, err := ctx.Client.DNS.Records.Delete(context.Background(), recordID, dns.RecordDeleteParams{
 		ZoneID: cf.F(zoneID),
 	})
 	if err != nil {
@@ -59,9 +55,9 @@ func deleteDnsRecord(ctx *executor.Context, _ chan<- string) (*RecordInformation
 
 	return &RecordInformation{
 		ZoneID:     zoneID,
-		ZoneName:   zoneName,
+		ZoneName:   executor.Get(ctx, executor.ZoneNameKey),
 		RecordID:   recordID,
-		RecordName: recordIdentifier,
+		RecordName: executor.Get(ctx, executor.RecordNameKey),
 	}, nil
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/flags"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
@@ -28,24 +29,17 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
-	deleteCmd.Flags().Bool("yes", false, "Bypass the confirmation prompt")
+	flags.RegisterConfirmation(deleteCmd)
 	ZoneCmd.AddCommand(deleteCmd)
 }
 
 func executeZoneDelete(cmd *cobra.Command, args []string) {
-	zoneIdentifier := args[0]
-	yes, _ := cmd.Flags().GetBool("yes")
-
-	if !yes {
-		confirmed, err := ui.Confirm(fmt.Sprintf("Are you sure you want to delete zone %s?", zoneIdentifier))
-		if err != nil || !confirmed {
-			fmt.Println(ui.Warning("Zone deletion cancelled."))
-			return
-		}
-	}
-
 	executor.New().
 		WithClient().
+		WithZone().
+		WithConfirmationFunc(func(ctx *executor.Context) string {
+			return fmt.Sprintf("Are you sure you want to delete zone %s (%s)?", executor.Get(ctx, executor.ZoneNameKey), executor.Get(ctx, executor.ZoneIDKey))
+		}).
 		Step(executor.NewStep(deletedZoneKey, "Deleting zone").Func(deleteZone)).
 		Display(printDeleteZoneResult).
 		Run()(cmd, args)

@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"dario.lol/cf/internal/cloudflare"
@@ -78,6 +79,70 @@ func createDnsRecord(ctx *executor.Context, _ chan<- string) (*RecordInformation
 			Content: cf.F(recordContent),
 			TTL:     cf.F(dns.TTL(ttl)),
 			Proxied: cf.F(proxied),
+		}
+	case "TXT":
+		body = &dns.TXTRecordParam{
+			Type:    cf.F(dns.TXTRecordTypeTXT),
+			Name:    cf.F(recordName),
+			Content: cf.F(recordContent),
+			TTL:     cf.F(dns.TTL(ttl)),
+		}
+	case "MX":
+		parts := strings.Fields(recordContent)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("invalid MX record content. Expected: '<priority> <target>'")
+		}
+		priority, err := strconv.ParseUint(parts[0], 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MX priority: %w", err)
+		}
+		body = &dns.MXRecordParam{
+			Type:     cf.F(dns.MXRecordTypeMX),
+			Name:     cf.F(recordName),
+			Content:  cf.F(strings.ReplaceAll(strings.Join(parts[1:], " "), "@", zoneName)),
+			Priority: cf.F(float64(priority)),
+			TTL:      cf.F(dns.TTL(ttl)),
+		}
+	case "SRV":
+		parts := strings.Fields(recordContent)
+		var p, w, po uint64
+		var target string
+		var err error
+
+		if len(parts) == 3 {
+			p, err = strconv.ParseUint(parts[0], 10, 16)
+			if err == nil {
+				w = 0
+				po, err = strconv.ParseUint(parts[1], 10, 16)
+				target = strings.Join(parts[2:], " ")
+			}
+		} else if len(parts) >= 4 {
+			p, err = strconv.ParseUint(parts[0], 10, 16)
+			if err == nil {
+				w, err = strconv.ParseUint(parts[1], 10, 16)
+				if err == nil {
+					po, err = strconv.ParseUint(parts[2], 10, 16)
+					target = strings.Join(parts[3:], " ")
+				}
+			}
+		} else {
+			return nil, fmt.Errorf("invalid SRV record content. Expected: '<priority> <weight> <port> <target>'")
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("error parsing SRV record fields: %w", err)
+		}
+
+		body = &dns.SRVRecordParam{
+			Type: cf.F(dns.SRVRecordTypeSRV),
+			Name: cf.F(recordName),
+			Data: cf.F(dns.SRVRecordDataParam{
+				Priority: cf.F(float64(p)),
+				Weight:   cf.F(float64(w)),
+				Port:     cf.F(float64(po)),
+				Target:   cf.F(strings.ReplaceAll(target, "@", zoneName)),
+			}),
+			TTL: cf.F(dns.TTL(ttl)),
 		}
 	default:
 		return nil, fmt.Errorf("unsupported record type: %s", recordType)

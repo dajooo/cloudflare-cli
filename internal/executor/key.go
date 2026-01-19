@@ -11,3 +11,10 @@ func NewKey[T any](name string) Key[T] {
 func (k Key[T]) Name() string {
 	return k.name
 }
+
+var (
+	ZoneIDKey     = NewKey[string]("zoneID")
+	ZoneNameKey   = NewKey[string]("zoneName")
+	RecordIDKey   = NewKey[string]("recordID")
+	RecordNameKey = NewKey[string]("recordName")
+)

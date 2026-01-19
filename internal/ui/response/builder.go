@@ -1,8 +1,11 @@
 package response
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
+	"dario.lol/cf/internal/executor"
 
 	"dario.lol/cf/internal/ui"
 )
@@ -62,6 +65,10 @@ func (b *Builder) Error(title string, err error) *Builder {
 
 func (b *Builder) Display() {
 	if b.err != nil {
+		if errors.Is(b.err, executor.ErrAborted) {
+			fmt.Println(ui.Muted("Aborted."))
+			return
+		}
 		fmt.Println(ui.ErrorMessage(b.errTitle, b.err))
 		return
 	}

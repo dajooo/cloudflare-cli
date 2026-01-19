@@ -4,21 +4,21 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"sort"
-	"strings"
 	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/db"
+	"dario.lol/cf/internal/flags"
 	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/ui"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 const (
@@ -93,6 +93,46 @@ func (b *ContextBuilder) WithPagination() *ContextBuilder {
 	return b
 }
 
+func (b *ContextBuilder) WithZone() *ContextBuilder {
+	b.steps = append(b.steps, step{
+		message: "Resolving zone",
+		run: func(ctx *Context, _ chan<- string) error {
+			zoneIdentifier := ctx.Args[0]
+			zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
+			if err != nil {
+				return err
+			}
+			Set(ctx, ZoneIDKey, zoneID)
+			Set(ctx, ZoneNameKey, zoneName)
+			return nil
+		},
+		silent: true,
+	})
+	return b
+}
+
+func (b *ContextBuilder) WithDNSRecord() *ContextBuilder {
+	b.steps = append(b.steps, step{
+		message: "Resolving DNS record",
+		run: func(ctx *Context, _ chan<- string) error {
+			zoneID := Get(ctx, ZoneIDKey)
+			if zoneID == "" {
+				return fmt.Errorf("zone must be resolved before record (call WithZone first)")
+			}
+			recordIdentifier := ctx.Args[1]
+			recordID, recordName, err := cloudflare.LookupDNSRecord(ctx.Client, zoneID, Get(ctx, ZoneNameKey), recordIdentifier)
+			if err != nil {
+				return err
+			}
+			Set(ctx, RecordIDKey, recordID)
+			Set(ctx, RecordNameKey, recordName)
+			return nil
+		},
+		silent: true,
+	})
+	return b
+}
+
 func (b *ContextBuilder) WithKVNamespace() *ContextBuilder {
 	b.steps = append(b.steps, step{
 		run: func(ctx *Context, _ chan<- string) error {
@@ -142,6 +182,36 @@ func (b *ContextBuilder) Display(fn func(ctx *Context)) *ContextBuilder {
 
 func (b *ContextBuilder) Invalidates(fn func(ctx *Context) []string) *ContextBuilder {
 	b.invalidatesFunc = fn
+	return b
+}
+
+func (b *ContextBuilder) WithConfirmation(message string) *ContextBuilder {
+	return b.WithConfirmationFunc(func(ctx *Context) string {
+		return message
+	})
+}
+
+func (b *ContextBuilder) WithConfirmationFunc(fn func(ctx *Context) string) *ContextBuilder {
+	b.steps = append(b.steps, step{
+		run: func(ctx *Context, _ chan<- string) error {
+			if skip, _ := ctx.Cmd.Flags().GetBool(flags.YesFlag); skip {
+				return nil
+			}
+			prompt := fn(ctx)
+			confirmed, err := ui.Confirm(prompt)
+			if err != nil {
+				if errors.Is(err, huh.ErrUserAborted) {
+					return ErrAborted
+				}
+				return err
+			}
+			if !confirmed {
+				return ErrAborted
+			}
+			return nil
+		},
+		silent: true,
+	})
 	return b
 }
 
@@ -282,25 +352,6 @@ func (b *ContextBuilder) storeToCache(ctx *Context, cacheKey string, steps []ste
 			_ = db.AddTagsToKey(cacheKey, []string{s.cacheKey})
 		}
 	}
-}
-
-func generateCacheKey2(cmd *cobra.Command, args []string) (string, error) {
-	var keyParts []string
-	keyParts = append(keyParts, cmd.CommandPath())
-	keyParts = append(keyParts, args...)
-
-	var flagParts []string
-	cmd.Flags().Visit(func(f *pflag.Flag) {
-		if f.Changed {
-			flagParts = append(flagParts, fmt.Sprintf("--%s=%s", f.Name, f.Value.String()))
-		}
-	})
-	sort.Strings(flagParts)
-	keyParts = append(keyParts, flagParts...)
-
-	h := sha256.New()
-	h.Write([]byte(strings.Join(keyParts, ";")))
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 func runStep(writer *bufio.Writer, message string, task func(progress chan<- string) error) error {

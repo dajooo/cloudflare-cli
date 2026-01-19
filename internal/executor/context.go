@@ -15,6 +15,10 @@ type Context struct {
 
 	Client      *cf.Client
 	AccountID   string
+	ZoneID      string
+	ZoneName    string
+	RecordID    string
+	RecordName  string
 	Pagination  pagination.Options
 	KVNamespace string
 
