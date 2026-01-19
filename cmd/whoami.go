@@ -21,10 +21,9 @@ var whoAmICmd = &cobra.Command{
 	Run: executor.New().
 		WithClient().
 		WithNoCache().
-		Step(executor.NewStep(userKey, "Fetching user information").Func(fetchUser)).
-		Caches(func(ctx *executor.Context) ([]string, error) {
-			return []string{"user:whoami"}, nil
-		}).
+		Step(executor.NewStep(userKey, "Fetching user information").
+			Func(fetchUser).
+			CacheKey("user:whoami")).
 		Display(printUserInfo).
 		Run(),
 }

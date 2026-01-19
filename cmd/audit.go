@@ -80,7 +80,7 @@ func printAuditLogs(ctx *executor.Context) {
 	if len(paginated) == 0 {
 		rb.NoItemsMessage("No audit logs found")
 	} else {
-		footer := fmt.Sprintf("Showing %d of %d log(s)", info.Showing, info.Total)
+		footer := info.FooterMessage("log(s)")
 		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 		rb.FooterSuccess(footer)
 	}

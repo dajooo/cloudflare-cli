@@ -61,7 +61,7 @@ func printListNamespaces(ctx *executor.Context) {
 	if len(paginated) == 0 {
 		rb.NoItemsMessage("No namespaces found")
 	} else {
-		footer := fmt.Sprintf("Showing %d of %d namespace(s)", info.Showing, info.Total)
+		footer := info.FooterMessage("namespace(s)")
 		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 		rb.FooterSuccess(footer)
 	}

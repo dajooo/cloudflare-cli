@@ -1,6 +1,10 @@
 package pagination
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
 
 const (
 	LimitFlag = "limit"
@@ -20,6 +24,29 @@ type PageInfo struct {
 	Total   int
 	Showing int
 	HasMore bool
+}
+
+// TotalPages returns the total number of pages
+func (p PageInfo) TotalPages() int {
+	if p.Limit <= 0 || p.Total == 0 {
+		return 1
+	}
+	pages := p.Total / p.Limit
+	if p.Total%p.Limit > 0 {
+		pages++
+	}
+	return pages
+}
+
+// FooterMessage returns a formatted pagination footer message
+func (p PageInfo) FooterMessage(itemName string) string {
+	if p.Limit <= 0 {
+		// No pagination - show all
+		return fmt.Sprintf("Showing %d %s", p.Total, itemName)
+	}
+	// Paginated - show page info
+	totalPages := p.TotalPages()
+	return fmt.Sprintf("Showing %d of %d %s (page %d/%d)", p.Showing, p.Total, itemName, p.Page, totalPages)
 }
 
 // RegisterFlags adds --limit and --page flags to a command

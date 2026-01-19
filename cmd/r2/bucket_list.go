@@ -60,7 +60,7 @@ func printListBuckets(ctx *executor.Context) {
 	if len(paginated) == 0 {
 		rb.NoItemsMessage("No buckets found")
 	} else {
-		footer := fmt.Sprintf("Showing %d of %d bucket(s)", info.Showing, info.Total)
+		footer := info.FooterMessage("bucket(s)")
 		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 		rb.FooterSuccess(footer)
 	}

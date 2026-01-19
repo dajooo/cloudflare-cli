@@ -22,10 +22,9 @@ var listCmd = &cobra.Command{
 		WithClient().
 		WithPagination().
 		WithNoCache().
-		Step(executor.NewStep(accountsKey, "Fetching accounts").Func(fetchAccounts)).
-		Caches(func(ctx *executor.Context) ([]string, error) {
-			return []string{"accounts:list"}, nil
-		}).
+		Step(executor.NewStep(accountsKey, "Fetching accounts").
+			Func(fetchAccounts).
+			CacheKey("accounts:list")).
 		Display(printAccountsList).
 		Run(),
 }
@@ -93,10 +92,7 @@ func printAccountsList(ctx *executor.Context) {
 	}
 
 	if len(paginated) > 0 {
-		footer := fmt.Sprintf("Showing %d of %d account(s)", info.Showing, info.Total)
-		if info.HasMore {
-			footer += fmt.Sprintf(" (page %d)", info.Page)
-		}
+		footer := info.FooterMessage("account(s)")
 		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 		rb.FooterSuccess(footer)
 	}

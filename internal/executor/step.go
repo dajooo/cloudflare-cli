@@ -5,14 +5,18 @@ type StepRunner interface {
 	run(ctx *Context, progress chan<- string) error
 	getMessage() string
 	isSilent() bool
+	getCacheKey() string
+	getCacheKeyFunc() func(*Context) string
 }
 
 // Step is a typed step builder
 type Step[T any] struct {
-	key     Key[T]
-	message string
-	fn      func(*Context, chan<- string) (T, error)
-	silent  bool
+	key          Key[T]
+	message      string
+	fn           func(*Context, chan<- string) (T, error)
+	silent       bool
+	cacheKey     string
+	cacheKeyFunc func(*Context) string
 }
 
 // NewStep creates a new typed step with a key and message
@@ -29,6 +33,18 @@ func (s *Step[T]) Func(fn func(*Context, chan<- string) (T, error)) *Step[T] {
 // Silent marks this step to run without a spinner
 func (s *Step[T]) Silent() *Step[T] {
 	s.silent = true
+	return s
+}
+
+// CacheKey sets a static cache key for this step (pagination params auto-appended)
+func (s *Step[T]) CacheKey(key string) *Step[T] {
+	s.cacheKey = key
+	return s
+}
+
+// CacheKeyFunc sets a dynamic cache key generator (pagination params auto-appended)
+func (s *Step[T]) CacheKeyFunc(fn func(*Context) string) *Step[T] {
+	s.cacheKeyFunc = fn
 	return s
 }
 
@@ -49,4 +65,12 @@ func (s *Step[T]) getMessage() string {
 
 func (s *Step[T]) isSilent() bool {
 	return s.silent
+}
+
+func (s *Step[T]) getCacheKey() string {
+	return s.cacheKey
+}
+
+func (s *Step[T]) getCacheKeyFunc() func(*Context) string {
+	return s.cacheKeyFunc
 }

@@ -34,16 +34,17 @@ type CachedResult struct {
 
 // step represents a single step in the execution pipeline
 type step struct {
-	message string
-	silent  bool
-	run     func(ctx *Context, progress chan<- string) error
+	message      string
+	silent       bool
+	run          func(ctx *Context, progress chan<- string) error
+	cacheKey     string                // Static cache key
+	cacheKeyFunc func(*Context) string // Dynamic cache key generator
 }
 
 // ContextBuilder constructs an executor pipeline with context
 type ContextBuilder struct {
 	steps           []step
 	displayFn       func(ctx *Context)
-	cachesFunc      func(ctx *Context) ([]string, error)
 	invalidatesFunc func(ctx *Context) []string
 	skipCache       bool
 }
@@ -135,9 +136,11 @@ func (b *ContextBuilder) WithNoCache() *ContextBuilder {
 // Step adds a typed step to the pipeline
 func (b *ContextBuilder) Step(s StepRunner) *ContextBuilder {
 	b.steps = append(b.steps, step{
-		message: s.getMessage(),
-		silent:  s.isSilent(),
-		run:     s.run,
+		message:      s.getMessage(),
+		silent:       s.isSilent(),
+		run:          s.run,
+		cacheKey:     s.getCacheKey(),
+		cacheKeyFunc: s.getCacheKeyFunc(),
 	})
 	return b
 }
@@ -145,12 +148,6 @@ func (b *ContextBuilder) Step(s StepRunner) *ContextBuilder {
 // Display sets the function to display results
 func (b *ContextBuilder) Display(fn func(ctx *Context)) *ContextBuilder {
 	b.displayFn = fn
-	return b
-}
-
-// Caches sets the cache key generator
-func (b *ContextBuilder) Caches(fn func(ctx *Context) ([]string, error)) *ContextBuilder {
-	b.cachesFunc = fn
 	return b
 }
 
@@ -174,15 +171,20 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 
 	start := time.Now()
 
-	// Check cache first
-	if b.cachesFunc != nil && b.invalidatesFunc == nil && !b.skipCache {
-		if cached := b.tryCache(ctx, writer); cached {
-			return
+	// Run all steps, checking cache for steps that have cache keys
+	for i, s := range b.steps {
+		// Before running a cacheable step, try to restore from cache
+		if b.hasCacheKey(s) && b.invalidatesFunc == nil && !b.skipCache {
+			cacheKey := b.buildCacheKey(ctx, s)
+			if b.tryRestoreFromCache(ctx, cacheKey) {
+				// Skip remaining steps except display
+				ctx.Duration = time.Since(start)
+				b.displayFn(ctx)
+				return
+			}
 		}
-	}
 
-	// Run all steps
-	for _, s := range b.steps {
+		// Run the step
 		if s.message != "" && !s.silent {
 			err := runStep(writer, s.message, func(progress chan<- string) error {
 				return s.run(ctx, progress)
@@ -205,33 +207,53 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 				return
 			}
 		}
+
+		// After running a cacheable step, store to cache
+		if b.hasCacheKey(s) && ctx.Error == nil && b.invalidatesFunc == nil {
+			cacheKey := b.buildCacheKey(ctx, s)
+			b.storeToCache(ctx, cacheKey, b.steps[i:])
+		}
 	}
 
 	ctx.Duration = time.Since(start)
 	fmt.Fprint(writer, ansiEraseLine)
 	_ = writer.Flush()
 
-	// Handle caching
-	if ctx.Error == nil {
-		if b.invalidatesFunc != nil {
-			tags := b.invalidatesFunc(ctx)
-			if len(tags) > 0 {
-				_ = db.InvalidateTags(tags)
-			}
-		} else if b.cachesFunc != nil {
-			b.storeCache(ctx)
+	// Handle invalidation
+	if ctx.Error == nil && b.invalidatesFunc != nil {
+		tags := b.invalidatesFunc(ctx)
+		if len(tags) > 0 {
+			_ = db.InvalidateTags(tags)
 		}
 	}
 
 	b.displayFn(ctx)
 }
 
-func (b *ContextBuilder) tryCache(ctx *Context, writer *bufio.Writer) bool {
-	cacheKey, err := generateCacheKey2(ctx.Cmd, ctx.Args)
-	if err != nil {
-		return false
+func (b *ContextBuilder) hasCacheKey(s step) bool {
+	return s.cacheKey != "" || s.cacheKeyFunc != nil
+}
+
+func (b *ContextBuilder) buildCacheKey(ctx *Context, s step) string {
+	var baseKey string
+	if s.cacheKeyFunc != nil {
+		baseKey = s.cacheKeyFunc(ctx)
+	} else {
+		baseKey = s.cacheKey
 	}
 
+	// Append pagination params if enabled
+	if ctx.Pagination.Limit > 0 || ctx.Pagination.Page > 1 {
+		baseKey = fmt.Sprintf("%s:limit=%d:page=%d", baseKey, ctx.Pagination.Limit, ctx.Pagination.Page)
+	}
+
+	// Hash the key
+	h := sha256.New()
+	h.Write([]byte(baseKey))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (b *ContextBuilder) tryRestoreFromCache(ctx *Context, cacheKey string) bool {
 	cachedBytes, _ := db.Get(db.CacheBucket, []byte(cacheKey))
 	if cachedBytes == nil {
 		return false
@@ -246,6 +268,7 @@ func (b *ContextBuilder) tryCache(ctx *Context, writer *bufio.Writer) bool {
 		return false
 	}
 
+	// Store raw JSON - Get[T] will lazily unmarshal to correct type
 	var dataMap map[string]json.RawMessage
 	if err := json.Unmarshal(cachedResult.Data, &dataMap); err != nil {
 		return false
@@ -255,21 +278,10 @@ func (b *ContextBuilder) tryCache(ctx *Context, writer *bufio.Writer) bool {
 		ctx.data[k] = v
 	}
 
-	b.displayFn(ctx)
 	return true
 }
 
-func (b *ContextBuilder) storeCache(ctx *Context) {
-	cacheKey, err := generateCacheKey2(ctx.Cmd, ctx.Args)
-	if err != nil {
-		return
-	}
-
-	tags, err := b.cachesFunc(ctx)
-	if err != nil || len(tags) == 0 {
-		return
-	}
-
+func (b *ContextBuilder) storeToCache(ctx *Context, cacheKey string, steps []step) {
 	dataToCache, err := json.Marshal(ctx.data)
 	if err != nil {
 		return
@@ -286,7 +298,13 @@ func (b *ContextBuilder) storeCache(ctx *Context) {
 	}
 
 	_ = db.Set(db.CacheBucket, []byte(cacheKey), bytesToStore)
-	_ = db.AddTagsToKey(cacheKey, tags)
+
+	// Use the cache key as the tag for invalidation
+	for _, s := range steps {
+		if s.cacheKey != "" {
+			_ = db.AddTagsToKey(cacheKey, []string{s.cacheKey})
+		}
+	}
 }
 
 func generateCacheKey2(cmd *cobra.Command, args []string) (string, error) {

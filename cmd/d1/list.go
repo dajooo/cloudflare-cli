@@ -63,7 +63,7 @@ func printListDatabases(ctx *executor.Context) {
 	}
 
 	if len(paginated) > 0 {
-		footer := fmt.Sprintf("Showing %d of %d database(s)", info.Showing, info.Total)
+		footer := info.FooterMessage("database(s)")
 		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 		rb.FooterSuccess(footer)
 	}

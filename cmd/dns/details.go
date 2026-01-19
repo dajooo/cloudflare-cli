@@ -28,16 +28,17 @@ var detailsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: executor.New().
 		WithClient().
-		Step(executor.NewStep(dnsRecordDetailsKey, "Fetching DNS record details").Func(fetchSingleDnsRecord)).
-		Caches(func(ctx *executor.Context) ([]string, error) {
-			zoneIdentifier := ctx.Args[0]
-			recordID := ctx.Args[1]
-			zoneID, _, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
-			if err != nil {
-				return nil, err
-			}
-			return []string{fmt.Sprintf("zone:%s:record:%s", zoneID, recordID)}, nil
-		}).
+		Step(executor.NewStep(dnsRecordDetailsKey, "Fetching DNS record details").
+			Func(fetchSingleDnsRecord).
+			CacheKeyFunc(func(ctx *executor.Context) string {
+				zoneIdentifier := ctx.Args[0]
+				recordID := ctx.Args[1]
+				zoneID, _, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
+				if err != nil {
+					return ""
+				}
+				return fmt.Sprintf("zone:%s:record:%s", zoneID, recordID)
+			})).
 		Display(printSingleDnsRecord).
 		Run(),
 }

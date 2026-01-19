@@ -23,10 +23,9 @@ var listCmd = &cobra.Command{
 		WithAccountID().
 		WithPagination().
 		WithNoCache().
-		Step(executor.NewStep(zonesKey, "Fetching zones").Func(fetchZones)).
-		Caches(func(ctx *executor.Context) ([]string, error) {
-			return []string{"zones:list"}, nil
-		}).
+		Step(executor.NewStep(zonesKey, "Fetching zones").
+			Func(fetchZones).
+			CacheKey("zones:list")).
 		Display(printZonesList).
 		Run(),
 }
@@ -89,10 +88,7 @@ func printZonesList(ctx *executor.Context) {
 	}
 
 	if len(paginated) > 0 {
-		footer := fmt.Sprintf("Showing %d of %d zone(s)", info.Showing, info.Total)
-		if info.HasMore {
-			footer += fmt.Sprintf(" (page %d)", info.Page)
-		}
+		footer := info.FooterMessage("zone(s)")
 		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 		rb.FooterSuccess(footer)
 	}

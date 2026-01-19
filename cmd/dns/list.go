@@ -44,18 +44,19 @@ var listCmd = &cobra.Command{
 		WithClient().
 		WithPagination().
 		WithNoCache().
-		Step(executor.NewStep(dnsRecordsKey, "Fetching DNS records").Func(fetchDnsRecords)).
-		Caches(func(ctx *executor.Context) ([]string, error) {
-			allZones, _ := ctx.Cmd.Flags().GetBool("all")
-			if allZones {
-				return nil, nil
-			}
-			zoneID, _, err := cloudflare.LookupZone(ctx.Client, ctx.Args[0])
-			if err != nil {
-				return nil, err
-			}
-			return []string{fmt.Sprintf("zone:%s", zoneID)}, nil
-		}).
+		Step(executor.NewStep(dnsRecordsKey, "Fetching DNS records").
+			Func(fetchDnsRecords).
+			CacheKeyFunc(func(ctx *executor.Context) string {
+				allZones, _ := ctx.Cmd.Flags().GetBool("all")
+				if allZones {
+					return "" // No caching for all zones
+				}
+				zoneID, _, err := cloudflare.LookupZone(ctx.Client, ctx.Args[0])
+				if err != nil {
+					return ""
+				}
+				return fmt.Sprintf("zone:%s:dns", zoneID)
+			})).
 		Display(printDnsRecords).
 		Run(),
 }
@@ -196,7 +197,7 @@ func printDnsRecords(ctx *executor.Context) {
 	}
 
 	fmt.Println()
-	footer := fmt.Sprintf("Showing %d of %d DNS record(s)", info.Showing, info.Total)
+	footer := info.FooterMessage("DNS record(s)")
 	footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
 	fmt.Println(ui.Success(footer))
 }
