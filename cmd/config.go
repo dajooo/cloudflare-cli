@@ -23,6 +23,11 @@ var configSetCmd = &cobra.Command{
 		key := strings.ToLower(args[0])
 		value := strings.ToLower(args[1])
 		rb := response.New()
+		err := config.LoadConfig()
+		if err != nil {
+			rb.Error("Error loading config", err)
+			return
+		}
 
 		switch key {
 		case "caching":

@@ -64,7 +64,6 @@ func LoadConfig() error {
 
 	Cfg = newCfg
 
-	// Environment variable overrides
 	if token := os.Getenv("CF_API_TOKEN"); token != "" {
 		Cfg.APIToken = EncryptedString(token)
 	}
