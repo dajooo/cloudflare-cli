@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"os"
 
 	"dario.lol/cf/internal/db"
 )
@@ -58,10 +59,24 @@ func LoadConfig() error {
 	if err == nil {
 		newCfg.Caching = string(caching) == "true"
 	} else {
-		newCfg.Caching = true // Default to true
+		newCfg.Caching = true
 	}
 
 	Cfg = newCfg
+
+	// Environment variable overrides
+	if token := os.Getenv("CF_API_TOKEN"); token != "" {
+		Cfg.APIToken = EncryptedString(token)
+	}
+	if key := os.Getenv("CF_API_KEY"); key != "" {
+		Cfg.APIKey = EncryptedString(key)
+	}
+	if email := os.Getenv("CF_API_EMAIL"); email != "" {
+		Cfg.APIEmail = email
+	}
+	if accountID := os.Getenv("CF_ACCOUNT_ID"); accountID != "" {
+		Cfg.AccountID = accountID
+	}
 
 	if Cfg.APIToken == "" && Cfg.APIEmail == "" && Cfg.APIKey == "" {
 		return ErrNotLoggedIn

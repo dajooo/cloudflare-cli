@@ -136,17 +136,18 @@ cf --help
 
 The CLI can be configured via a configuration file or environment variables.
 
-### Config File
+### Config Storage
 
-Upon successful login, a configuration file is created at `~/.cloudflare-cli.yaml`. The API credentials within this file are encrypted.
+Upon successful login, your configuration is stored in a local database at `~/.cloudflare-cli/cf.db`. API credentials are encrypted using `age` (X25519), with the private identity stored securely in your system's native keyring.
 
 ### Environment Variables
 
-You can override the settings in the config file using the following environment variables:
+You can override the settings in the configuration using the following environment variables:
 
 - `CF_API_TOKEN`: Your Cloudflare API Token.
 - `CF_API_KEY`: Your Cloudflare Global API Key (legacy).
 - `CF_API_EMAIL`: Your Cloudflare account email (used with the Global API Key).
+- `CF_ACCOUNT_ID`: Your Cloudflare Account ID.
 
 ## 🤝 Contributing
 
@@ -162,5 +163,3 @@ Contributions are welcome\! Please feel free to open an issue or submit a pull r
 ## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-```
