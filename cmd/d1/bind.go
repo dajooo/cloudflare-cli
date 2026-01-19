@@ -112,5 +112,5 @@ func printD1BindResult(ctx *executor.Context) {
 	}
 	proj := executor.Get(ctx, boundD1ProjectKey)
 	bindBindingName, _ := ctx.Cmd.Flags().GetString("name")
-	rb.FooterSuccess("Successfully bound database to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully bound database to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

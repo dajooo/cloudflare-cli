@@ -119,5 +119,5 @@ func printR2BindResult(ctx *executor.Context) {
 	}
 	proj := executor.Get(ctx, boundR2ProjectKey)
 	bindBindingName, _ := ctx.Cmd.Flags().GetString("name")
-	rb.FooterSuccess("Successfully bound R2 bucket to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully bound R2 bucket to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

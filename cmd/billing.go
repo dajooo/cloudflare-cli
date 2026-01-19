@@ -78,6 +78,6 @@ func printBillingProfile(ctx *executor.Context) {
 	}
 
 	rb.AddItem("Profile Details", icb.String())
-	rb.FooterSuccess("Fetched billing profile %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration)))
+	rb.FooterSuccessf("Fetched billing profile %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration)))
 	rb.Display()
 }

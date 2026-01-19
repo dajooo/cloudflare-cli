@@ -108,5 +108,5 @@ func printCreateDnsResult(ctx *executor.Context) {
 		return
 	}
 	record := executor.Get(ctx, createdRecordKey)
-	rb.FooterSuccess("Successfully created DNS record %s (%s) in zone %s %s", record.RecordName, record.RecordID, record.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully created DNS record %s (%s) in zone %s %s", record.RecordName, record.RecordID, record.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

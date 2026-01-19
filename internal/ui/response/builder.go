@@ -44,7 +44,12 @@ func (b *Builder) NoItemsMessage(message string) *Builder {
 	return b
 }
 
-func (b *Builder) FooterSuccess(format string, a ...any) *Builder {
+func (b *Builder) FooterSuccess(msg string) *Builder {
+	b.footerSuccess = msg
+	return b
+}
+
+func (b *Builder) FooterSuccessf(format string, a ...any) *Builder {
 	b.footerSuccess = fmt.Sprintf(format, a...)
 	return b
 }

@@ -139,5 +139,5 @@ func printExecResult(ctx *executor.Context) {
 		}
 	}
 
-	rb.FooterSuccess("Executed successfully %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Executed successfully %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

@@ -44,5 +44,5 @@ func printCreateBucket(ctx *executor.Context) {
 		return
 	}
 	bucket := executor.Get(ctx, createdBucketKey)
-	rb.FooterSuccess("Successfully created bucket %s %s", bucket.Name, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully created bucket %s %s", bucket.Name, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

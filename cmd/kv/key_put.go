@@ -48,5 +48,5 @@ func printPutKey(ctx *executor.Context) {
 		rb.Error("Error putting key", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully put key %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully put key %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

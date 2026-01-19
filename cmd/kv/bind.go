@@ -112,5 +112,5 @@ func printKVBindResult(ctx *executor.Context) {
 	}
 	proj := executor.Get(ctx, boundKVProjectKey)
 	bindBindingName, _ := ctx.Cmd.Flags().GetString("name")
-	rb.FooterSuccess("Successfully bound KV namespace to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully bound KV namespace to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

@@ -78,6 +78,6 @@ func printNamespaceSwitch(ctx *executor.Context) {
 	ns := executor.Get(ctx, switchedNamespaceKey)
 	response.New().
 		Title("Namespace Switched").
-		FooterSuccess("Switched context to namespace %s (%s)", ui.Text(ns.Title), ui.Muted(ns.ID)).
+		FooterSuccessf("Switched to namespace %s (%s) %s", ns.Title, ns.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).
 		Display()
 }

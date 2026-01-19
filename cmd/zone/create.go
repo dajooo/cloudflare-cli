@@ -52,5 +52,5 @@ func printCreateZoneResult(ctx *executor.Context) {
 		return
 	}
 	zone := executor.Get(ctx, createdZoneKey)
-	rb.FooterSuccess("Successfully created zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully created zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

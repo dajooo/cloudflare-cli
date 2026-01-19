@@ -125,6 +125,6 @@ func printUserInfo(ctx *executor.Context) {
 		rb.AddItem("Beta Programs", ui.BulletList(betaItems))
 	}
 
-	rb.FooterSuccess("Authentication successful %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).
+	rb.FooterSuccessf("Authentication successful %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).
 		Display()
 }

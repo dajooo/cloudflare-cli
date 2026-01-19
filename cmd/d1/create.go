@@ -44,5 +44,5 @@ func printCreateDatabase(ctx *executor.Context) {
 		return
 	}
 	db := executor.Get(ctx, createdDatabaseKey)
-	rb.FooterSuccess("Successfully created database %s (%s) %s", db.Name, db.UUID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully created database %s (%s) %s", db.Name, db.UUID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

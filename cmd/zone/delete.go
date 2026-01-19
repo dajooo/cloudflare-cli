@@ -77,5 +77,5 @@ func printDeleteZoneResult(ctx *executor.Context) {
 		return
 	}
 	zone := executor.Get(ctx, deletedZoneKey)
-	rb.FooterSuccess("Successfully deleted zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully deleted zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

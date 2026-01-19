@@ -75,6 +75,6 @@ func printAccountSwitch(ctx *executor.Context) {
 	account := executor.Get(ctx, switchedAccountKey)
 	response.New().
 		Title("Account Switched").
-		FooterSuccess("Switched context to account %s (%s)", ui.Text(account.Name), ui.Muted(account.ID)).
+		FooterSuccessf("Switched to account %s (%s) %s", account.Name, account.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).
 		Display()
 }

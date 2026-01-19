@@ -79,5 +79,5 @@ func printSSLResult(ctx *executor.Context) {
 		return
 	}
 	info := executor.Get(ctx, sslInfoKey)
-	rb.FooterSuccess("SSL mode for %s is %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("SSL mode for %s is %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

@@ -84,5 +84,5 @@ func printSSLSetResult(ctx *executor.Context) {
 		return
 	}
 	info := executor.Get(ctx, sslSetInfoKey)
-	rb.FooterSuccess("Updated SSL mode for %s to %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Updated SSL mode for %s to %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

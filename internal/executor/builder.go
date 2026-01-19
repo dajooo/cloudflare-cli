@@ -26,22 +26,19 @@ const (
 	DefaultCacheTTL = 5 * time.Minute
 )
 
-// CachedResult stores cached data with timestamp
 type CachedResult struct {
 	Timestamp time.Time       `json:"timestamp"`
 	Data      json.RawMessage `json:"data"`
 }
 
-// step represents a single step in the execution pipeline
 type step struct {
 	message      string
 	silent       bool
 	run          func(ctx *Context, progress chan<- string) error
-	cacheKey     string                // Static cache key
-	cacheKeyFunc func(*Context) string // Dynamic cache key generator
+	cacheKey     string
+	cacheKeyFunc func(*Context) string
 }
 
-// ContextBuilder constructs an executor pipeline with context
 type ContextBuilder struct {
 	steps           []step
 	displayFn       func(ctx *Context)
@@ -49,12 +46,10 @@ type ContextBuilder struct {
 	skipCache       bool
 }
 
-// New creates a new context-based executor builder
 func New() *ContextBuilder {
 	return &ContextBuilder{}
 }
 
-// WithClient adds a step that creates and stores the Cloudflare client
 func (b *ContextBuilder) WithClient() *ContextBuilder {
 	b.steps = append(b.steps, step{
 		message: "Decrypting configuration",
@@ -71,7 +66,6 @@ func (b *ContextBuilder) WithClient() *ContextBuilder {
 	return b
 }
 
-// WithAccountID adds a step that resolves and stores the account ID
 func (b *ContextBuilder) WithAccountID() *ContextBuilder {
 	b.steps = append(b.steps, step{
 		message: "Resolving account",
@@ -88,7 +82,6 @@ func (b *ContextBuilder) WithAccountID() *ContextBuilder {
 	return b
 }
 
-// WithPagination adds a step that parses pagination flags
 func (b *ContextBuilder) WithPagination() *ContextBuilder {
 	b.steps = append(b.steps, step{
 		run: func(ctx *Context, _ chan<- string) error {
@@ -100,7 +93,6 @@ func (b *ContextBuilder) WithPagination() *ContextBuilder {
 	return b
 }
 
-// WithKVNamespace adds a step that resolves and stores the KV namespace ID
 func (b *ContextBuilder) WithKVNamespace() *ContextBuilder {
 	b.steps = append(b.steps, step{
 		run: func(ctx *Context, _ chan<- string) error {
@@ -119,7 +111,6 @@ func (b *ContextBuilder) WithKVNamespace() *ContextBuilder {
 	return b
 }
 
-// WithNoCache adds a step that reads the --no-cache flag
 func (b *ContextBuilder) WithNoCache() *ContextBuilder {
 	b.steps = append(b.steps, step{
 		run: func(ctx *Context, _ chan<- string) error {
@@ -133,7 +124,6 @@ func (b *ContextBuilder) WithNoCache() *ContextBuilder {
 	return b
 }
 
-// Step adds a typed step to the pipeline
 func (b *ContextBuilder) Step(s StepRunner) *ContextBuilder {
 	b.steps = append(b.steps, step{
 		message:      s.getMessage(),
@@ -145,19 +135,16 @@ func (b *ContextBuilder) Step(s StepRunner) *ContextBuilder {
 	return b
 }
 
-// Display sets the function to display results
 func (b *ContextBuilder) Display(fn func(ctx *Context)) *ContextBuilder {
 	b.displayFn = fn
 	return b
 }
 
-// Invalidates sets the cache invalidation function
 func (b *ContextBuilder) Invalidates(fn func(ctx *Context) []string) *ContextBuilder {
 	b.invalidatesFunc = fn
 	return b
 }
 
-// Run returns a cobra run function
 func (b *ContextBuilder) Run() func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		b.execute(cmd, args)
@@ -171,20 +158,16 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 
 	start := time.Now()
 
-	// Run all steps, checking cache for steps that have cache keys
 	for i, s := range b.steps {
-		// Before running a cacheable step, try to restore from cache
 		if b.hasCacheKey(s) && b.invalidatesFunc == nil && !b.skipCache {
 			cacheKey := b.buildCacheKey(ctx, s)
 			if b.tryRestoreFromCache(ctx, cacheKey) {
-				// Skip remaining steps except display
 				ctx.Duration = time.Since(start)
 				b.displayFn(ctx)
 				return
 			}
 		}
 
-		// Run the step
 		if s.message != "" && !s.silent {
 			err := runStep(writer, s.message, func(progress chan<- string) error {
 				return s.run(ctx, progress)
@@ -208,7 +191,6 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		// After running a cacheable step, store to cache
 		if b.hasCacheKey(s) && ctx.Error == nil && b.invalidatesFunc == nil {
 			cacheKey := b.buildCacheKey(ctx, s)
 			b.storeToCache(ctx, cacheKey, b.steps[i:])
@@ -219,7 +201,6 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 	fmt.Fprint(writer, ansiEraseLine)
 	_ = writer.Flush()
 
-	// Handle invalidation
 	if ctx.Error == nil && b.invalidatesFunc != nil {
 		tags := b.invalidatesFunc(ctx)
 		if len(tags) > 0 {
@@ -242,12 +223,10 @@ func (b *ContextBuilder) buildCacheKey(ctx *Context, s step) string {
 		baseKey = s.cacheKey
 	}
 
-	// Append pagination params if enabled
 	if ctx.Pagination.Limit > 0 || ctx.Pagination.Page > 1 {
 		baseKey = fmt.Sprintf("%s:limit=%d:page=%d", baseKey, ctx.Pagination.Limit, ctx.Pagination.Page)
 	}
 
-	// Hash the key
 	h := sha256.New()
 	h.Write([]byte(baseKey))
 	return fmt.Sprintf("%x", h.Sum(nil))
@@ -268,7 +247,6 @@ func (b *ContextBuilder) tryRestoreFromCache(ctx *Context, cacheKey string) bool
 		return false
 	}
 
-	// Store raw JSON - Get[T] will lazily unmarshal to correct type
 	var dataMap map[string]json.RawMessage
 	if err := json.Unmarshal(cachedResult.Data, &dataMap); err != nil {
 		return false
@@ -299,7 +277,6 @@ func (b *ContextBuilder) storeToCache(ctx *Context, cacheKey string, steps []ste
 
 	_ = db.Set(db.CacheBucket, []byte(cacheKey), bytesToStore)
 
-	// Use the cache key as the tag for invalidation
 	for _, s := range steps {
 		if s.cacheKey != "" {
 			_ = db.AddTagsToKey(cacheKey, []string{s.cacheKey})

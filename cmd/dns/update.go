@@ -119,5 +119,5 @@ func printUpdateDnsResult(ctx *executor.Context) {
 		return
 	}
 	result := executor.Get(ctx, updatedRecordKey)
-	rb.FooterSuccess("Successfully updated DNS record %s (%s) %s", result.Record.Name, result.Record.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully updated DNS record %s (%s) %s", result.Record.Name, result.Record.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

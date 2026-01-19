@@ -44,5 +44,5 @@ func printCreateNamespace(ctx *executor.Context) {
 		return
 	}
 	ns := executor.Get(ctx, createdNamespaceKey)
-	rb.FooterSuccess("Created namespace %s (%s) %s", ns.Title, ns.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Created namespace %s (%s) %s", ns.Title, ns.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

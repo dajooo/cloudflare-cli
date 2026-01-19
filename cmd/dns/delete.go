@@ -72,5 +72,5 @@ func printDeleteDnsResult(ctx *executor.Context) {
 		return
 	}
 	deletedRecord := executor.Get(ctx, deletedRecordKey)
-	rb.FooterSuccess("Successfully deleted DNS record %s (%s) in zone %s %s", deletedRecord.RecordName, deletedRecord.RecordID, deletedRecord.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully deleted DNS record %s (%s) in zone %s %s", deletedRecord.RecordName, deletedRecord.RecordID, deletedRecord.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

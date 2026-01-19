@@ -83,5 +83,5 @@ func printPurgeResult(ctx *executor.Context) {
 		rb.Error("Error purging cache", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully purged cache %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
+	rb.FooterSuccessf("Successfully purged cache %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }
