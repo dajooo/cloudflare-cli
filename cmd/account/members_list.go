@@ -3,17 +3,18 @@ package account
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/flags"
+	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/accounts"
 	"github.com/spf13/cobra"
 )
+
+var membersKey = executor.NewKey[[]accounts.Member]("members")
 
 var membersCmd = &cobra.Command{
 	Use:   "members",
@@ -23,64 +24,71 @@ var membersCmd = &cobra.Command{
 var membersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List members of the current account",
-	Run: executor.NewBuilder[*cf.Client, []accounts.Member]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching members", func(client *cf.Client, cmd *cobra.Command, args []string, progress chan<- string) ([]accounts.Member, error) {
-			accountID, err := cloudflare.GetAccountID(client, cmd, "")
-			if err != nil {
-				return nil, err
-			}
-
-			membersList, err := client.Accounts.Members.List(context.Background(), accounts.MemberListParams{
-				AccountID: cf.F(accountID),
-			})
-			if err != nil {
-				return nil, err
-			}
-			return membersList.Result, nil
-		}).
-		Display(func(members []accounts.Member, fetchDuration time.Duration, err error) {
-			rb := response.New().Title("Account Members")
-			if err != nil {
-				rb.Error("Error fetching members", err).Display()
-				return
-			}
-
-			rb.Summary("Total:", len(members))
-
-			for _, member := range members {
-				roles := []string{}
-				for _, role := range member.Roles {
-					roles = append(roles, role.Name)
-				}
-
-				statusColor := ui.Success
-				if string(member.Status) != "accepted" {
-					statusColor = ui.Warning
-				}
-
-				icb := response.NewItemContent().
-					Add("Email:", ui.Text(member.User.Email)).
-					Add("Status:", statusColor(string(member.Status))).
-					Add("Roles:", ui.Muted(fmt.Sprintf("%v", roles)))
-
-				rb.AddItem(member.User.FirstName+" "+member.User.LastName, icb.String())
-			}
-
-			if len(members) > 0 {
-				rb.FooterSuccess("Found %d member(s)", len(members))
-			} else {
-				rb.NoItemsMessage("No members found")
-			}
-
-			rb.Display()
-		}).
-		Build().
-		CobraRun(),
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		WithPagination().
+		Step(executor.NewStep(membersKey, "Fetching members").Func(fetchMembers)).
+		Display(printMembersList).
+		Run(),
 }
 
 func init() {
 	flags.RegisterAccountID(membersCmd)
+	pagination.RegisterFlags(membersListCmd)
 	membersCmd.AddCommand(membersListCmd)
 	AccountCmd.AddCommand(membersCmd)
+}
+
+func fetchMembers(ctx *executor.Context, _ chan<- string) ([]accounts.Member, error) {
+	membersList, err := ctx.Client.Accounts.Members.List(context.Background(), accounts.MemberListParams{
+		AccountID: cf.F(ctx.AccountID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return membersList.Result, nil
+}
+
+func printMembersList(ctx *executor.Context) {
+	rb := response.New().Title("Account Members")
+
+	if ctx.Error != nil {
+		rb.Error("Error fetching members", ctx.Error).Display()
+		return
+	}
+
+	members := executor.Get(ctx, membersKey)
+	paginated, info := pagination.Paginate(members, ctx.Pagination)
+
+	rb.Summary("Total:", info.Total)
+
+	for _, member := range paginated {
+		roles := []string{}
+		for _, role := range member.Roles {
+			roles = append(roles, role.Name)
+		}
+
+		statusColor := ui.Success
+		if string(member.Status) != "accepted" {
+			statusColor = ui.Warning
+		}
+
+		icb := response.NewItemContent().
+			Add("Email:", ui.Text(member.User.Email)).
+			Add("Status:", statusColor(string(member.Status))).
+			Add("Roles:", ui.Muted(fmt.Sprintf("%v", roles)))
+
+		rb.AddItem(member.User.FirstName+" "+member.User.LastName, icb.String())
+	}
+
+	if len(paginated) > 0 {
+		footer := fmt.Sprintf("Showing %d of %d member(s)", info.Showing, info.Total)
+		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
+		rb.FooterSuccess(footer)
+	} else {
+		rb.NoItemsMessage("No members found")
+	}
+
+	rb.Display()
 }

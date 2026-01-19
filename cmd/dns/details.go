@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -21,44 +20,38 @@ import (
 	"golang.org/x/text/language"
 )
 
+var dnsRecordDetailsKey = executor.NewKey[types.DnsRecordWithZone]("dnsRecordDetails")
+
 var detailsCmd = &cobra.Command{
 	Use:   "details [zone] [record]",
 	Short: "Shows all details for a single DNS record",
 	Args:  cobra.ExactArgs(2),
-	Run: executor.NewBuilder[*cf.Client, types.DnsRecordWithZone]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching DNS record details", fetchSingleDnsRecord).
-		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
-			start := time.Now()
-			zoneIdentifier := args[0]
-			recordID := args[1]
-			client, err := cloudflare.NewClient()
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(dnsRecordDetailsKey, "Fetching DNS record details").Func(fetchSingleDnsRecord)).
+		Caches(func(ctx *executor.Context) ([]string, error) {
+			zoneIdentifier := ctx.Args[0]
+			recordID := ctx.Args[1]
+			zoneID, _, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 			if err != nil {
 				return nil, err
 			}
-			zoneID, _, err := cloudflare.LookupZone(client, zoneIdentifier)
-			if err != nil {
-				return nil, err
-			}
-			cacheKey := fmt.Sprintf("zone:%s:record:%s", zoneID, recordID)
-			fmt.Printf("Time for cache lookup %v\n", time.Since(start))
-			return []string{cacheKey}, nil
+			return []string{fmt.Sprintf("zone:%s:record:%s", zoneID, recordID)}, nil
 		}).
 		Display(printSingleDnsRecord).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
 	DnsCmd.AddCommand(detailsCmd)
 }
 
-func fetchSingleDnsRecord(client *cf.Client, _ *cobra.Command, args []string, progress chan<- string) (types.DnsRecordWithZone, error) {
-	zoneIdentifier := args[0]
-	recordID := args[1]
+func fetchSingleDnsRecord(ctx *executor.Context, progress chan<- string) (types.DnsRecordWithZone, error) {
+	zoneIdentifier := ctx.Args[0]
+	recordID := ctx.Args[1]
 
 	progress <- fmt.Sprintf("Looking up zone %q", zoneIdentifier)
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return types.DnsRecordWithZone{}, err
 	}
@@ -67,7 +60,7 @@ func fetchSingleDnsRecord(client *cf.Client, _ *cobra.Command, args []string, pr
 	params := dns.RecordGetParams{
 		ZoneID: cf.F(zoneID),
 	}
-	record, err := client.DNS.Records.Get(context.Background(), recordID, params)
+	record, err := ctx.Client.DNS.Records.Get(context.Background(), recordID, params)
 	if err != nil {
 		return types.DnsRecordWithZone{}, fmt.Errorf("could not fetch DNS record: %w", err)
 	}
@@ -138,11 +131,13 @@ func renderStructuredDataBox(title string, data interface{}) {
 	}
 }
 
-func printSingleDnsRecord(record types.DnsRecordWithZone, fetchDuration time.Duration, err error) {
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Failed to get DNS record", err))
+func printSingleDnsRecord(ctx *executor.Context) {
+	if ctx.Error != nil {
+		fmt.Println(ui.ErrorMessage("Failed to get DNS record", ctx.Error))
 		return
 	}
+
+	record := executor.Get(ctx, dnsRecordDetailsKey)
 
 	mainIcb := response.NewItemContent()
 	mainIcb.Add("Name:", ui.Text(record.Name))
@@ -180,16 +175,10 @@ func printSingleDnsRecord(record types.DnsRecordWithZone, fetchDuration time.Dur
 	}
 	mainIcb.AddRaw("")
 	if !record.CreatedOn.IsZero() {
-		mainIcb.Add("Created On:", ui.Muted(record.CreatedOn.Format(time.RFC1123)))
+		mainIcb.Add("Created On:", ui.Muted(record.CreatedOn.Format("2006-01-02 15:04:05")))
 	}
 	if !record.ModifiedOn.IsZero() {
-		mainIcb.Add("Modified On:", ui.Muted(record.ModifiedOn.Format(time.RFC1123)))
-	}
-	if !record.CommentModifiedOn.IsZero() {
-		mainIcb.Add("Comment Modified:", ui.Muted(record.CommentModifiedOn.Format(time.RFC1123)))
-	}
-	if !record.TagsModifiedOn.IsZero() {
-		mainIcb.Add("Tags Modified:", ui.Muted(record.TagsModifiedOn.Format(time.RFC1123)))
+		mainIcb.Add("Modified On:", ui.Muted(record.ModifiedOn.Format("2006-01-02 15:04:05")))
 	}
 
 	fmt.Println()
@@ -200,5 +189,5 @@ func printSingleDnsRecord(record types.DnsRecordWithZone, fetchDuration time.Dur
 	renderStructuredDataBox("Meta", record.Meta)
 
 	fmt.Println()
-	fmt.Println(ui.Success(fmt.Sprintf("Fetched record %s %s", record.Name, ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))))
+	fmt.Println(ui.Success(fmt.Sprintf("Fetched record %s %s", record.Name, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration)))))
 }

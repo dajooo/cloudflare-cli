@@ -3,9 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -14,38 +12,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var createdNamespaceKey = executor.NewKey[*kv.Namespace]("createdNamespace")
+
 var createNamespaceCmd = &cobra.Command{
 	Use:   "create <title>",
 	Short: "Create a new KV namespace",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, *kv.Namespace]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Creating namespace", createNamespace).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(createdNamespaceKey, "Creating namespace").Func(createNamespace)).
 		Display(printCreateNamespace).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
 	namespaceCmd.AddCommand(createNamespaceCmd)
 }
 
-func createNamespace(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*kv.Namespace, error) {
-	accountID, err := cloudflare.GetAccountID(client, cmd, namespaceAccountID)
-	if err != nil {
-		return nil, err
-	}
-	return client.KV.Namespaces.New(context.Background(), kv.NamespaceNewParams{
-		AccountID: cf.F(accountID),
-		Title:     cf.F(args[0]),
+func createNamespace(ctx *executor.Context, _ chan<- string) (*kv.Namespace, error) {
+	return ctx.Client.KV.Namespaces.New(context.Background(), kv.NamespaceNewParams{
+		AccountID: cf.F(ctx.AccountID),
+		Title:     cf.F(ctx.Args[0]),
 	})
 }
 
-func printCreateNamespace(ns *kv.Namespace, duration time.Duration, err error) {
+func printCreateNamespace(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error creating namespace", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error creating namespace", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Created namespace %s (%s) %s", ns.Title, ns.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	ns := executor.Get(ctx, createdNamespaceKey)
+	rb.FooterSuccess("Created namespace %s (%s) %s", ns.Title, ns.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

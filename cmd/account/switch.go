@@ -3,9 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
@@ -15,23 +13,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var switchedAccountKey = executor.NewKey[accounts.Account]("switchedAccount")
+
 var switchCmd = &cobra.Command{
 	Use:   "switch <name-or-id>",
 	Short: "Switch the active account context",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, accounts.Account]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Verifying account", runAccountSwitch).
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(switchedAccountKey, "Verifying account").Func(runAccountSwitch)).
 		Display(printAccountSwitch).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
-func runAccountSwitch(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (accounts.Account, error) {
-	input := args[0]
+func init() {
+	AccountCmd.AddCommand(switchCmd)
+}
+
+func runAccountSwitch(ctx *executor.Context, _ chan<- string) (accounts.Account, error) {
+	input := ctx.Args[0]
 	var selectedAccount accounts.Account
 
-	list, err := client.Accounts.List(context.Background(), accounts.AccountListParams{
+	list, err := ctx.Client.Accounts.List(context.Background(), accounts.AccountListParams{
 		Name: cf.F(input),
 	})
 	if err != nil {
@@ -47,7 +50,7 @@ func runAccountSwitch(client *cf.Client, _ *cobra.Command, args []string, _ chan
 		}
 		return accounts.Account{}, fmt.Errorf("%s\nPlease specify the Account ID.", msg)
 	} else {
-		account, err := client.Accounts.Get(context.Background(), accounts.AccountGetParams{
+		account, err := ctx.Client.Accounts.Get(context.Background(), accounts.AccountGetParams{
 			AccountID: cf.F(input),
 		})
 		if err != nil {
@@ -64,17 +67,14 @@ func runAccountSwitch(client *cf.Client, _ *cobra.Command, args []string, _ chan
 	return selectedAccount, nil
 }
 
-func printAccountSwitch(account accounts.Account, _ time.Duration, err error) {
-	if err != nil {
-		response.New().Error("Failed to switch account", err).Display()
+func printAccountSwitch(ctx *executor.Context) {
+	if ctx.Error != nil {
+		response.New().Error("Failed to switch account", ctx.Error).Display()
 		return
 	}
+	account := executor.Get(ctx, switchedAccountKey)
 	response.New().
 		Title("Account Switched").
 		FooterSuccess("Switched context to account %s (%s)", ui.Text(account.Name), ui.Muted(account.ID)).
 		Display()
-}
-
-func init() {
-	AccountCmd.AddCommand(switchCmd)
 }

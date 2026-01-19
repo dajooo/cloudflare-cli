@@ -3,9 +3,7 @@ package r2
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -15,39 +13,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var bindAccountID string
-var bindToProject string
-var bindBindingName string
+var boundR2ProjectKey = executor.NewKey[*pages.Project]("boundR2Project")
 
 var bindCmd = &cobra.Command{
 	Use:   "bind <bucket_name>",
 	Short: "Bind an R2 bucket to a Pages project",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, *pages.Project]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Binding bucket", bindBucket).
-		Display(printBindResult).
-		Build().
-		CobraRun(),
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(boundR2ProjectKey, "Binding bucket").Func(bindBucket)).
+		Display(printR2BindResult).
+		Run(),
 }
 
 func init() {
-	bindCmd.Flags().StringVar(&bindAccountID, "account-id", "", "The account ID")
-	bindCmd.Flags().StringVar(&bindToProject, "to", "", "The Pages project name to bind to")
-	bindCmd.Flags().StringVar(&bindBindingName, "name", "BUCKET", "The binding name (variable name used in your code)")
+	bindCmd.Flags().String("to", "", "The Pages project name to bind to")
+	bindCmd.Flags().String("name", "BUCKET", "The binding name (variable name used in your code)")
 	bindCmd.MarkFlagRequired("to")
 	R2Cmd.AddCommand(bindCmd)
 }
 
-func bindBucket(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
-	accID, err := cloudflare.GetAccountID(client, cmd, bindAccountID)
-	if err != nil {
-		return nil, err
-	}
-	bucketName := args[0]
+func bindBucket(ctx *executor.Context, _ chan<- string) (*pages.Project, error) {
+	bucketName := ctx.Args[0]
+	bindToProject, _ := ctx.Cmd.Flags().GetString("to")
+	bindBindingName, _ := ctx.Cmd.Flags().GetString("name")
 
-	res, err := client.R2.Buckets.List(context.Background(), r2.BucketListParams{
-		AccountID: cf.F(accID),
+	res, err := ctx.Client.R2.Buckets.List(context.Background(), r2.BucketListParams{
+		AccountID: cf.F(ctx.AccountID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error listing R2 buckets: %w", err)
@@ -64,8 +57,8 @@ func bindBucket(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- s
 		return nil, fmt.Errorf("bucket '%s' not found", bucketName)
 	}
 
-	proj, err := client.Pages.Projects.Get(context.Background(), bindToProject, pages.ProjectGetParams{
-		AccountID: cf.F(accID),
+	proj, err := ctx.Client.Pages.Projects.Get(context.Background(), bindToProject, pages.ProjectGetParams{
+		AccountID: cf.F(ctx.AccountID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error getting project '%s': %w", bindToProject, err)
@@ -103,8 +96,8 @@ func bindBucket(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- s
 		Name: cf.F(bucketName),
 	}
 
-	return client.Pages.Projects.Edit(context.Background(), bindToProject, pages.ProjectEditParams{
-		AccountID: cf.F(accID),
+	return ctx.Client.Pages.Projects.Edit(context.Background(), bindToProject, pages.ProjectEditParams{
+		AccountID: cf.F(ctx.AccountID),
 		Project: pages.ProjectParam{
 			DeploymentConfigs: cf.F(pages.ProjectDeploymentConfigsParam{
 				Production: cf.F(pages.ProjectDeploymentConfigsProductionParam{
@@ -118,11 +111,13 @@ func bindBucket(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- s
 	})
 }
 
-func printBindResult(proj *pages.Project, duration time.Duration, err error) {
+func printR2BindResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error binding R2 bucket", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error binding R2 bucket", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully bound R2 bucket to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	proj := executor.Get(ctx, boundR2ProjectKey)
+	bindBindingName, _ := ctx.Cmd.Flags().GetString("name")
+	rb.FooterSuccess("Successfully bound R2 bucket to project '%s' as '%s' %s", proj.Name, bindBindingName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

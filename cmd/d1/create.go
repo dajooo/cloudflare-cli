@@ -3,9 +3,7 @@ package d1
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -14,41 +12,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var createAccountID string
+var createdDatabaseKey = executor.NewKey[*d1.D1]("createdDatabase")
 
 var createCmd = &cobra.Command{
 	Use:   "create <name>",
 	Short: "Create a new D1 database",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, *d1.D1]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Creating database", createDatabase).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(createdDatabaseKey, "Creating database").Func(createDatabase)).
 		Display(printCreateDatabase).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	createCmd.Flags().StringVar(&createAccountID, "account-id", "", "The account ID to create the database in")
 	D1Cmd.AddCommand(createCmd)
 }
 
-func createDatabase(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*d1.D1, error) {
-	accID, err := cloudflare.GetAccountID(client, cmd, createAccountID)
-	if err != nil {
-		return nil, err
-	}
-	return client.D1.Database.New(context.Background(), d1.DatabaseNewParams{
-		AccountID: cf.F(accID),
-		Name:      cf.F(args[0]),
+func createDatabase(ctx *executor.Context, _ chan<- string) (*d1.D1, error) {
+	return ctx.Client.D1.Database.New(context.Background(), d1.DatabaseNewParams{
+		AccountID: cf.F(ctx.AccountID),
+		Name:      cf.F(ctx.Args[0]),
 	})
 }
 
-func printCreateDatabase(db *d1.D1, duration time.Duration, err error) {
+func printCreateDatabase(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error creating database", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error creating database", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully created database %s (%s) %s", db.Name, db.UUID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	db := executor.Get(ctx, createdDatabaseKey)
+	rb.FooterSuccess("Successfully created database %s (%s) %s", db.Name, db.UUID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

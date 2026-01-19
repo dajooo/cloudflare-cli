@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -15,40 +14,44 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var ttl int
-var proxied bool
+var createdRecordKey = executor.NewKey[*RecordInformation]("createdRecord")
 
 var createCmd = &cobra.Command{
 	Use:   "create <zone> <name> <type> <content>",
 	Short: "Creates a new DNS record",
 	Args:  cobra.ExactArgs(4),
-	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Creating DNS record", createDnsRecord).
-		Display(printCreateDnsResult).
-		Invalidates(func(cmd *cobra.Command, args []string, result *RecordInformation) []string {
-			return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(createdRecordKey, "Creating DNS record").Func(createDnsRecord)).
+		Invalidates(func(ctx *executor.Context) []string {
+			record := executor.Get(ctx, createdRecordKey)
+			if record != nil {
+				return []string{fmt.Sprintf("zone:%s", record.ZoneID)}
+			}
+			return nil
 		}).
-		Build().
-		CobraRun(),
+		Display(printCreateDnsResult).
+		Run(),
 }
 
 func init() {
-	createCmd.Flags().IntVar(&ttl, "ttl", 1, "The TTL of the DNS record")
-	createCmd.Flags().BoolVar(&proxied, "proxied", false, "Whether the DNS record should be proxied")
+	createCmd.Flags().Int("ttl", 1, "The TTL of the DNS record")
+	createCmd.Flags().Bool("proxied", false, "Whether the DNS record should be proxied")
 	DnsCmd.AddCommand(createCmd)
 }
 
-func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*RecordInformation, error) {
-	zoneIdentifier := args[0]
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+func createDnsRecord(ctx *executor.Context, _ chan<- string) (*RecordInformation, error) {
+	zoneIdentifier := ctx.Args[0]
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding zone: %s", err)
 	}
 
-	recordName := args[1]
-	recordType := args[2]
-	recordContent := strings.ReplaceAll(args[3], "@", zoneName)
+	recordName := ctx.Args[1]
+	recordType := ctx.Args[2]
+	recordContent := strings.ReplaceAll(ctx.Args[3], "@", zoneName)
+	ttl, _ := ctx.Cmd.Flags().GetInt("ttl")
+	proxied, _ := ctx.Cmd.Flags().GetBool("proxied")
 
 	var body dns.RecordNewParamsBodyUnion
 	switch strings.ToUpper(recordType) {
@@ -85,7 +88,7 @@ func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<
 		Body:   body,
 	}
 
-	record, err := client.DNS.Records.New(context.Background(), params)
+	record, err := ctx.Client.DNS.Records.New(context.Background(), params)
 	if err != nil {
 		return nil, fmt.Errorf("error creating DNS record: %s", err)
 	}
@@ -98,11 +101,12 @@ func createDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<
 	}, nil
 }
 
-func printCreateDnsResult(record *RecordInformation, duration time.Duration, err error) {
+func printCreateDnsResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error creating DNS record", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error creating DNS record", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully created DNS record %s (%s) in zone %s %s", record.RecordName, record.RecordID, record.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	record := executor.Get(ctx, createdRecordKey)
+	rb.FooterSuccess("Successfully created DNS record %s (%s) in zone %s %s", record.RecordName, record.RecordID, record.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

@@ -3,10 +3,9 @@ package d1
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
@@ -14,32 +13,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var listAccountID string
+var databasesKey = executor.NewKey[[]d1.DatabaseListResponse]("databases")
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List D1 databases",
-	Run: executor.NewBuilder[*cf.Client, []d1.DatabaseListResponse]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching databases", listDatabases).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		WithPagination().
+		Step(executor.NewStep(databasesKey, "Fetching databases").Func(listDatabases)).
 		Display(printListDatabases).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	listCmd.Flags().StringVar(&listAccountID, "account-id", "", "The account ID to list databases from")
+	pagination.RegisterFlags(listCmd)
 	D1Cmd.AddCommand(listCmd)
 }
 
-func listDatabases(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- string) ([]d1.DatabaseListResponse, error) {
-	accID, err := cloudflare.GetAccountID(client, cmd, listAccountID)
-	if err != nil {
-		return nil, err
-	}
-	// Using AutoPaging if possible
-	pager := client.D1.Database.ListAutoPaging(context.Background(), d1.DatabaseListParams{
-		AccountID: cf.F(accID),
+func listDatabases(ctx *executor.Context, _ chan<- string) ([]d1.DatabaseListResponse, error) {
+	pager := ctx.Client.D1.Database.ListAutoPaging(context.Background(), d1.DatabaseListParams{
+		AccountID: cf.F(ctx.AccountID),
 	})
 
 	var all []d1.DatabaseListResponse
@@ -52,19 +47,26 @@ func listDatabases(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- s
 	return all, nil
 }
 
-func printListDatabases(dbs []d1.DatabaseListResponse, duration time.Duration, err error) {
+func printListDatabases(ctx *executor.Context) {
 	rb := response.New().Title("D1 Databases").NoItemsMessage("No databases found")
-	if err != nil {
-		rb.Error("Error listing databases", err).Display()
+
+	if ctx.Error != nil {
+		rb.Error("Error listing databases", ctx.Error).Display()
 		return
 	}
 
-	for _, db := range dbs {
+	dbs := executor.Get(ctx, databasesKey)
+	paginated, info := pagination.Paginate(dbs, ctx.Pagination)
+
+	for _, db := range paginated {
 		rb.AddItem(db.Name, ui.Muted(fmt.Sprintf("ID: %s", db.UUID)))
 	}
 
-	if len(dbs) == 0 {
-		rb.FooterSuccess("Found %d databases %s", len(dbs), ui.Muted(fmt.Sprintf("(took %v)", duration)))
+	if len(paginated) > 0 {
+		footer := fmt.Sprintf("Showing %d of %d database(s)", info.Showing, info.Total)
+		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
+		rb.FooterSuccess(footer)
 	}
+
 	rb.Display()
 }

@@ -4,51 +4,49 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
-	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/user"
 	"github.com/spf13/cobra"
 )
 
-var noCache bool
+var userKey = executor.NewKey[*user.UserGetResponse]("user")
 
 var whoAmICmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Get current user",
-	Run: executor.NewBuilder[*cf.Client, *user.UserGetResponse]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching user information", fetchUser).
-		Display(printUserInfo).
-		SkipCache(noCache).
-		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+	Run: executor.New().
+		WithClient().
+		WithNoCache().
+		Step(executor.NewStep(userKey, "Fetching user information").Func(fetchUser)).
+		Caches(func(ctx *executor.Context) ([]string, error) {
 			return []string{"user:whoami"}, nil
 		}).
-		Build().
-		CobraRun(),
+		Display(printUserInfo).
+		Run(),
 }
 
 func init() {
-	whoAmICmd.Flags().BoolVar(&noCache, "no-cache", false, "Bypass the cache and fetch directly from the API")
+	whoAmICmd.Flags().Bool("no-cache", false, "Bypass the cache and fetch directly from the API")
 	rootCmd.AddCommand(whoAmICmd)
 }
 
-func fetchUser(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string) (*user.UserGetResponse, error) {
-	return client.User.Get(context.Background())
+func fetchUser(ctx *executor.Context, _ chan<- string) (*user.UserGetResponse, error) {
+	return ctx.Client.User.Get(context.Background())
 }
 
-func printUserInfo(user *user.UserGetResponse, fetchDuration time.Duration, err error) {
+func printUserInfo(ctx *executor.Context) {
 	rb := response.New().Title("Account Information")
 
-	if err != nil {
-		rb.Error("Error getting user information", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error getting user information", ctx.Error).Display()
 		return
 	}
+
+	user := executor.Get(ctx, userKey)
 
 	identityContent := response.NewItemContent()
 	if user.FirstName != "" || user.LastName != "" {
@@ -128,6 +126,6 @@ func printUserInfo(user *user.UserGetResponse, fetchDuration time.Duration, err 
 		rb.AddItem("Beta Programs", ui.BulletList(betaItems))
 	}
 
-	rb.FooterSuccess("Authentication successful %s", ui.Muted(fmt.Sprintf("(took %v)", fetchDuration))).
+	rb.FooterSuccess("Authentication successful %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).
 		Display()
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -15,16 +14,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var sslInfoKey = executor.NewKey[*SSLInfo]("sslInfo")
+
 var getCmd = &cobra.Command{
 	Use:   "get <zone>",
 	Short: "Get SSL/TLS encryption mode",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, *SSLInfo]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching SSL status", getSSL).
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(sslInfoKey, "Fetching SSL status").Func(getSSL)).
 		Display(printSSLResult).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 type SSLInfo struct {
@@ -37,22 +37,20 @@ func init() {
 	SslCmd.AddCommand(getCmd)
 }
 
-func getSSL(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*SSLInfo, error) {
-	zoneIdentifier := args[0]
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+func getSSL(ctx *executor.Context, _ chan<- string) (*SSLInfo, error) {
+	zoneIdentifier := ctx.Args[0]
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding zone: %s", err)
 	}
 
-	// Fetch zone settings
-	settings, err := client.Zones.Settings.Get(context.Background(), "ssl", zones.SettingGetParams{
+	settings, err := ctx.Client.Zones.Settings.Get(context.Background(), "ssl", zones.SettingGetParams{
 		ZoneID: cf.F(zoneID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching zone settings: %s", err)
 	}
 
-	// Handle different response types
 	var sslMode string
 	switch v := settings.Value.(type) {
 	case zones.SettingGetResponseZonesSchemasSSL:
@@ -70,15 +68,16 @@ func getSSL(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string)
 	}, nil
 }
 
-func printSSLResult(info *SSLInfo, duration time.Duration, err error) {
+func printSSLResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		if strings.Contains(err.Error(), "10000") || strings.Contains(err.Error(), "Unauthorized") {
+	if ctx.Error != nil {
+		if strings.Contains(ctx.Error.Error(), "10000") || strings.Contains(ctx.Error.Error(), "Unauthorized") {
 			rb.Error("Missing Permissions", fmt.Errorf("your API token lacks permissions. Ensure you have:\n- 'Zone / SSL and Certificates' Edit\n- 'Zone / Zone Settings' Read")).Display()
 			return
 		}
-		rb.Error("Error fetching SSL status", err).Display()
+		rb.Error("Error fetching SSL status", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("SSL mode for %s is %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	info := executor.Get(ctx, sslInfoKey)
+	rb.FooterSuccess("SSL mode for %s is %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

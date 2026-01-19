@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -15,51 +14,56 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var updateRecordName string
-var updateRecordType string
-var updateRecordContent string
-var updateProxied bool
-
 type updateResult struct {
 	Record *dns.RecordResponse
 	ZoneID string
 }
 
+var updatedRecordKey = executor.NewKey[*updateResult]("updatedRecord")
+
 var updateCmd = &cobra.Command{
 	Use:   "update <zone> <record>",
 	Short: "Updates an existing DNS record, identified by its ID",
 	Args:  cobra.ExactArgs(2),
-	Run: executor.NewBuilder[*cf.Client, *updateResult]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Updating DNS record", updateDnsRecord).
-		Display(printUpdateDnsResult).
-		Invalidates(func(cmd *cobra.Command, args []string, result *updateResult) []string {
-			return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(updatedRecordKey, "Updating DNS record").Func(updateDnsRecord)).
+		Invalidates(func(ctx *executor.Context) []string {
+			result := executor.Get(ctx, updatedRecordKey)
+			if result != nil {
+				return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+			}
+			return nil
 		}).
-		Build().
-		CobraRun(),
+		Display(printUpdateDnsResult).
+		Run(),
 }
 
 func init() {
-	updateCmd.Flags().StringVar(&updateRecordName, "name", "", "The new name of the DNS record")
-	updateCmd.Flags().StringVar(&updateRecordType, "type", "", "The new type of the DNS record")
-	updateCmd.Flags().StringVar(&updateRecordContent, "content", "", "The new content of the DNS record")
-	updateCmd.Flags().BoolVar(&updateProxied, "proxied", false, "Whether the DNS record should be proxied")
+	updateCmd.Flags().String("name", "", "The new name of the DNS record")
+	updateCmd.Flags().String("type", "", "The new type of the DNS record")
+	updateCmd.Flags().String("content", "", "The new content of the DNS record")
+	updateCmd.Flags().Bool("proxied", false, "Whether the DNS record should be proxied")
 	DnsCmd.AddCommand(updateCmd)
 }
 
-func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*updateResult, error) {
-	zoneIdentifier := args[0]
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+func updateDnsRecord(ctx *executor.Context, _ chan<- string) (*updateResult, error) {
+	zoneIdentifier := ctx.Args[0]
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding zone: %w", err)
 	}
 
-	recordIdentifier := args[1]
-	recordID, err := cloudflare.LookupDNSRecordID(client, zoneID, zoneName, recordIdentifier)
+	recordIdentifier := ctx.Args[1]
+	recordID, err := cloudflare.LookupDNSRecordID(ctx.Client, zoneID, zoneName, recordIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding record: %w", err)
 	}
+
+	updateRecordName, _ := ctx.Cmd.Flags().GetString("name")
+	updateRecordType, _ := ctx.Cmd.Flags().GetString("type")
+	updateRecordContent, _ := ctx.Cmd.Flags().GetString("content")
+	updateProxied, _ := ctx.Cmd.Flags().GetBool("proxied")
 
 	if updateRecordType == "" || updateRecordName == "" || updateRecordContent == "" {
 		return nil, fmt.Errorf("flags --name, --type, and --content are required for an update")
@@ -97,7 +101,7 @@ func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<
 		Body:   body,
 	}
 
-	record, err := client.DNS.Records.Update(context.Background(), recordID, params)
+	record, err := ctx.Client.DNS.Records.Update(context.Background(), recordID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -108,11 +112,12 @@ func updateDnsRecord(client *cf.Client, _ *cobra.Command, args []string, _ chan<
 	}, nil
 }
 
-func printUpdateDnsResult(result *updateResult, duration time.Duration, err error) {
+func printUpdateDnsResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error updating DNS record", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error updating DNS record", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully updated DNS record %s (%s) %s", result.Record.Name, result.Record.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	result := executor.Get(ctx, updatedRecordKey)
+	rb.FooterSuccess("Successfully updated DNS record %s (%s) %s", result.Record.Name, result.Record.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

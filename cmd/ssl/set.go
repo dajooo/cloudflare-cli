@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -16,37 +15,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var sslSetInfoKey = executor.NewKey[*SSLInfo]("sslSetInfo")
+
 var setCmd = &cobra.Command{
 	Use:   "set <zone> <mode>",
 	Short: "Set SSL/TLS encryption mode (off, flexible, full, strict)",
 	Args:  cobra.ExactArgs(2),
-	Run: executor.NewBuilder[*cf.Client, *SSLInfo]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Updating SSL status", setSSL).
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(sslSetInfoKey, "Updating SSL status").Func(setSSL)).
 		Display(printSSLSetResult).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
 	SslCmd.AddCommand(setCmd)
 }
 
-func setSSL(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*SSLInfo, error) {
-	zoneIdentifier := args[0]
-	mode := args[1]
+func setSSL(ctx *executor.Context, _ chan<- string) (*SSLInfo, error) {
+	zoneIdentifier := ctx.Args[0]
+	mode := ctx.Args[1]
 
 	validModes := []string{"off", "flexible", "full", "strict"}
 	if !slices.Contains(validModes, mode) {
 		return nil, fmt.Errorf("invalid ssl mode: %s. valid modes are: %v", mode, validModes)
 	}
 
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding zone: %s", err)
 	}
 
-	settings, err := client.Zones.Settings.Edit(context.Background(), "ssl", zones.SettingEditParams{
+	settings, err := ctx.Client.Zones.Settings.Edit(context.Background(), "ssl", zones.SettingEditParams{
 		ZoneID: cf.F(zoneID),
 		Body: zones.SettingEditParamsBody{
 			Value: cf.F[interface{}](mode),
@@ -73,15 +73,16 @@ func setSSL(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string)
 	}, nil
 }
 
-func printSSLSetResult(info *SSLInfo, duration time.Duration, err error) {
+func printSSLSetResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		if strings.Contains(err.Error(), "10000") || strings.Contains(err.Error(), "Unauthorized") {
+	if ctx.Error != nil {
+		if strings.Contains(ctx.Error.Error(), "10000") || strings.Contains(ctx.Error.Error(), "Unauthorized") {
 			rb.Error("Missing Permissions", fmt.Errorf("your API token lacks permissions. Ensure you have:\n- 'Zone / SSL and Certificates' Edit\n- 'Zone / Zone Settings' Edit")).Display()
 			return
 		}
-		rb.Error("Error updating SSL status", err).Display()
+		rb.Error("Error updating SSL status", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Updated SSL mode for %s to %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	info := executor.Get(ctx, sslSetInfoKey)
+	rb.FooterSuccess("Updated SSL mode for %s to %s %s", info.ZoneName, ui.Code.Render(info.Mode), ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

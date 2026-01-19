@@ -3,10 +3,9 @@ package r2
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
 	cf "github.com/cloudflare/cloudflare-go/v6"
@@ -14,49 +13,57 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var listAccountID string
+var bucketsKey = executor.NewKey[[]r2.Bucket]("buckets")
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List R2 buckets",
-	Run: executor.NewBuilder[*cf.Client, *r2.BucketListResponse]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching buckets", listBuckets).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		WithPagination().
+		Step(executor.NewStep(bucketsKey, "Fetching buckets").Func(listBuckets)).
 		Display(printListBuckets).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	listCmd.Flags().StringVar(&listAccountID, "account-id", "", "The account ID to list buckets from")
+	pagination.RegisterFlags(listCmd)
 	bucketCmd.AddCommand(listCmd)
 }
 
-func listBuckets(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- string) (*r2.BucketListResponse, error) {
-	accID, err := cloudflare.GetAccountID(client, cmd, listAccountID)
+func listBuckets(ctx *executor.Context, _ chan<- string) ([]r2.Bucket, error) {
+	res, err := ctx.Client.R2.Buckets.List(context.Background(), r2.BucketListParams{
+		AccountID: cf.F(ctx.AccountID),
+	})
 	if err != nil {
 		return nil, err
 	}
-	return client.R2.Buckets.List(context.Background(), r2.BucketListParams{
-		AccountID: cf.F(accID),
-	})
+	return res.Buckets, nil
 }
 
-func printListBuckets(res *r2.BucketListResponse, duration time.Duration, err error) {
+func printListBuckets(ctx *executor.Context) {
 	rb := response.New().Title("R2 Buckets")
-	if err != nil {
-		rb.Error("Error listing buckets", err).Display()
+
+	if ctx.Error != nil {
+		rb.Error("Error listing buckets", ctx.Error).Display()
 		return
 	}
 
-	for _, bucket := range res.Buckets {
+	buckets := executor.Get(ctx, bucketsKey)
+	paginated, info := pagination.Paginate(buckets, ctx.Pagination)
+
+	for _, bucket := range paginated {
 		rb.AddItem(bucket.Name, ui.Muted(bucket.CreationDate))
 	}
 
-	if len(res.Buckets) == 0 {
+	if len(paginated) == 0 {
 		rb.NoItemsMessage("No buckets found")
 	} else {
-		rb.FooterSuccess("Found %d buckets %s", len(res.Buckets), ui.Muted(fmt.Sprintf("(took %v)", duration)))
+		footer := fmt.Sprintf("Showing %d of %d bucket(s)", info.Showing, info.Total)
+		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
+		rb.FooterSuccess(footer)
 	}
+
 	rb.Display()
 }

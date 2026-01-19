@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -18,38 +16,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var execAccountID string
+var queryResultsKey = executor.NewKey[[]d1.QueryResult]("queryResults")
 
 var execCmd = &cobra.Command{
 	Use:   "exec <name> -- <query>",
 	Short: "Execute a query against a D1 database",
 	Args:  cobra.MinimumNArgs(1),
-	Run: executor.NewBuilder[*cf.Client, []d1.QueryResult]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Executing query", execQueryFunc).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(queryResultsKey, "Executing query").Func(execQueryFunc)).
 		Display(printExecResult).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	execCmd.Flags().StringVar(&execAccountID, "account-id", "", "The account ID")
 	D1Cmd.AddCommand(execCmd)
 }
 
-func execQueryFunc(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) ([]d1.QueryResult, error) {
-	// The account ID is now fetched in the previous step and passed as the first arg
-	accID := args[0]
-	dbName := args[1]
+func execQueryFunc(ctx *executor.Context, _ chan<- string) ([]d1.QueryResult, error) {
+	dbName := ctx.Args[0]
 
-	if len(args) < 3 {
+	if len(ctx.Args) < 2 {
 		return nil, fmt.Errorf("please provide a query after the database name, e.g. `cf d1 exec my-db -- 'SELECT * FROM users'`")
 	}
 
-	query := strings.Join(args[1:], " ")
+	query := strings.Join(ctx.Args[1:], " ")
 
-	pager := client.D1.Database.ListAutoPaging(context.Background(), d1.DatabaseListParams{
-		AccountID: cf.F(accID),
+	pager := ctx.Client.D1.Database.ListAutoPaging(context.Background(), d1.DatabaseListParams{
+		AccountID: cf.F(ctx.AccountID),
 	})
 
 	var targetUUID string
@@ -68,8 +63,8 @@ func execQueryFunc(client *cf.Client, cmd *cobra.Command, args []string, _ chan<
 		return nil, fmt.Errorf("database '%s' not found", dbName)
 	}
 
-	page, err := client.D1.Database.Query(context.Background(), targetUUID, d1.DatabaseQueryParams{
-		AccountID: cf.F(accID),
+	page, err := ctx.Client.D1.Database.Query(context.Background(), targetUUID, d1.DatabaseQueryParams{
+		AccountID: cf.F(ctx.AccountID),
 		Sql:       cf.F(query),
 	})
 	if err != nil {
@@ -79,12 +74,14 @@ func execQueryFunc(client *cf.Client, cmd *cobra.Command, args []string, _ chan<
 	return page.Result, nil
 }
 
-func printExecResult(results []d1.QueryResult, duration time.Duration, err error) {
+func printExecResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error executing query", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error executing query", ctx.Error).Display()
 		return
 	}
+
+	results := executor.Get(ctx, queryResultsKey)
 
 	for i, res := range results {
 		if !res.Success {
@@ -93,23 +90,19 @@ func printExecResult(results []d1.QueryResult, duration time.Duration, err error
 		}
 
 		if len(res.Results) > 0 {
-			// Try to cast the first row to a map
 			firstRow, ok := res.Results[0].(map[string]interface{})
 			if !ok {
-				// Fallback to simple dump if not a map
 				rb.AddItem(fmt.Sprintf("Result %d", i+1), fmt.Sprintf("Rows: %d", len(res.Results)))
 				rb.AddItem("Sample", fmt.Sprintf("%v", res.Results[0]))
 				continue
 			}
 
-			// Get headers from the first row of map keys
 			headers := make([]string, 0, len(firstRow))
 			for k := range firstRow {
 				headers = append(headers, k)
 			}
 			sort.Strings(headers)
 
-			// Build table
 			t := table.New().
 				Border(lipgloss.HiddenBorder()).
 				BorderStyle(lipgloss.NewStyle().Foreground(ui.C.Gray500)).
@@ -127,7 +120,6 @@ func printExecResult(results []d1.QueryResult, duration time.Duration, err error
 						row = append(row, "NULL")
 					} else {
 						strVal := fmt.Sprintf("%v", val)
-						// Remove newlines and tabs to keep the table clean
 						strVal = strings.ReplaceAll(strVal, "\n", " ")
 						strVal = strings.ReplaceAll(strVal, "\r", " ")
 						strVal = strings.ReplaceAll(strVal, "\t", " ")
@@ -147,5 +139,5 @@ func printExecResult(results []d1.QueryResult, duration time.Duration, err error
 		}
 	}
 
-	rb.FooterSuccess("Executed successfully %s", ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	rb.FooterSuccess("Executed successfully %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

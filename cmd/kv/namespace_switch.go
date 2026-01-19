@@ -3,9 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
@@ -15,29 +13,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var switchedNamespaceKey = executor.NewKey[kv.Namespace]("switchedNamespace")
+
 var switchNamespaceCmd = &cobra.Command{
 	Use:   "switch <name-or-id>",
 	Short: "Switch the active KV namespace context",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, kv.Namespace]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Verifying namespace", runNamespaceSwitch).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(switchedNamespaceKey, "Verifying namespace").Func(runNamespaceSwitch)).
 		Display(printNamespaceSwitch).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
-func runNamespaceSwitch(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (kv.Namespace, error) {
-	input := args[0]
+func init() {
+	namespaceCmd.AddCommand(switchNamespaceCmd)
+}
+
+func runNamespaceSwitch(ctx *executor.Context, _ chan<- string) (kv.Namespace, error) {
+	input := ctx.Args[0]
 	var selectedNamespace kv.Namespace
 
-	accID, err := cloudflare.GetAccountID(client, cmd, namespaceAccountID)
-	if err != nil {
-		return kv.Namespace{}, err
-	}
-
-	pager := client.KV.Namespaces.ListAutoPaging(context.Background(), kv.NamespaceListParams{
-		AccountID: cf.F(accID),
+	pager := ctx.Client.KV.Namespaces.ListAutoPaging(context.Background(), kv.NamespaceListParams{
+		AccountID: cf.F(ctx.AccountID),
 	})
 
 	var matches []kv.Namespace
@@ -71,17 +70,14 @@ func runNamespaceSwitch(client *cf.Client, cmd *cobra.Command, args []string, _ 
 	return selectedNamespace, nil
 }
 
-func printNamespaceSwitch(ns kv.Namespace, _ time.Duration, err error) {
-	if err != nil {
-		response.New().Error("Failed to switch namespace", err).Display()
+func printNamespaceSwitch(ctx *executor.Context) {
+	if ctx.Error != nil {
+		response.New().Error("Failed to switch namespace", ctx.Error).Display()
 		return
 	}
+	ns := executor.Get(ctx, switchedNamespaceKey)
 	response.New().
 		Title("Namespace Switched").
 		FooterSuccess("Switched context to namespace %s (%s)", ui.Text(ns.Title), ui.Muted(ns.ID)).
 		Display()
-}
-
-func init() {
-	namespaceCmd.AddCommand(switchNamespaceCmd)
 }

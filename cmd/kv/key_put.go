@@ -3,10 +3,7 @@ package kv
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
-	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -15,49 +12,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var putResultKey = executor.NewKey[bool]("putResult")
+
 var putKeyCmd = &cobra.Command{
 	Use:   "put <key> <value>",
 	Short: "Put a key-value pair into a namespace",
 	Args:  cobra.ExactArgs(2),
-	Run: executor.NewBuilder[*cf.Client, *kv.NamespaceValueUpdateResponse]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Putting key", putKey).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		WithKVNamespace().
+		Step(executor.NewStep(putResultKey, "Putting key").Func(putKey)).
 		Display(printPutKey).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
 	keyCmd.AddCommand(putKeyCmd)
 }
 
-func putKey(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*kv.NamespaceValueUpdateResponse, error) {
-	accID, err := cloudflare.GetAccountID(client, cmd, keyAccountID)
-	if err != nil {
-		return nil, err
-	}
-	keyName := args[0]
-	value := args[1]
+func putKey(ctx *executor.Context, _ chan<- string) (bool, error) {
+	keyName := ctx.Args[0]
+	value := ctx.Args[1]
 
-	nsID := namespaceID
-	if nsID == "" {
-		nsID = config.Cfg.KVNamespaceID
-	}
-	if nsID == "" {
-		return nil, fmt.Errorf("namespace ID is required. Use --namespace-id or 'cf kv namespace switch'")
-	}
-
-	return client.KV.Namespaces.Values.Update(context.Background(), nsID, keyName, kv.NamespaceValueUpdateParams{
-		AccountID: cf.F(accID),
+	_, err := ctx.Client.KV.Namespaces.Values.Update(context.Background(), ctx.KVNamespace, keyName, kv.NamespaceValueUpdateParams{
+		AccountID: cf.F(ctx.AccountID),
 		Value:     cf.F(value),
 	})
+	return err == nil, err
 }
 
-func printPutKey(res *kv.NamespaceValueUpdateResponse, duration time.Duration, err error) {
+func printPutKey(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error putting key", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error putting key", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully put key %s", ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	rb.FooterSuccess("Successfully put key %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

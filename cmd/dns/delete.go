@@ -3,7 +3,6 @@ package dns
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -14,39 +13,44 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var deletedRecordKey = executor.NewKey[*RecordInformation]("deletedRecord")
+
 var deleteCmd = &cobra.Command{
 	Use:   "delete <zone> <record>",
 	Short: "Deletes a DNS record",
 	Args:  cobra.ExactArgs(2),
-	Run: executor.NewBuilder[*cf.Client, *RecordInformation]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Deleting DNS record", deleteDnsRecord).
-		Invalidates(func(cmd *cobra.Command, args []string, result *RecordInformation) []string {
-			return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+	Run: executor.New().
+		WithClient().
+		Step(executor.NewStep(deletedRecordKey, "Deleting DNS record").Func(deleteDnsRecord)).
+		Invalidates(func(ctx *executor.Context) []string {
+			record := executor.Get(ctx, deletedRecordKey)
+			if record != nil {
+				return []string{fmt.Sprintf("zone:%s", record.ZoneID)}
+			}
+			return nil
 		}).
 		Display(printDeleteDnsResult).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
 	DnsCmd.AddCommand(deleteCmd)
 }
 
-func deleteDnsRecord(client *cf.Client, _ *cobra.Command, args []string, progress chan<- string) (*RecordInformation, error) {
-	zoneIdentifier := args[0]
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+func deleteDnsRecord(ctx *executor.Context, _ chan<- string) (*RecordInformation, error) {
+	zoneIdentifier := ctx.Args[0]
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding zone: %s", err)
 	}
 
-	recordIdentifier := args[1]
-	recordID, err := cloudflare.LookupDNSRecordID(client, zoneID, zoneName, recordIdentifier)
+	recordIdentifier := ctx.Args[1]
+	recordID, err := cloudflare.LookupDNSRecordID(ctx.Client, zoneID, zoneName, recordIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding record: %s", err)
 	}
 
-	_, err = client.DNS.Records.Delete(context.Background(), recordID, dns.RecordDeleteParams{
+	_, err = ctx.Client.DNS.Records.Delete(context.Background(), recordID, dns.RecordDeleteParams{
 		ZoneID: cf.F(zoneID),
 	})
 	if err != nil {
@@ -61,11 +65,12 @@ func deleteDnsRecord(client *cf.Client, _ *cobra.Command, args []string, progres
 	}, nil
 }
 
-func printDeleteDnsResult(deletedRecord *RecordInformation, duration time.Duration, err error) {
+func printDeleteDnsResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error deleting DNS record", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error deleting DNS record", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully deleted DNS record %s (%s) in zone %s %s", deletedRecord.RecordName, deletedRecord.RecordID, deletedRecord.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	deletedRecord := executor.Get(ctx, deletedRecordKey)
+	rb.FooterSuccess("Successfully deleted DNS record %s (%s) in zone %s %s", deletedRecord.RecordName, deletedRecord.RecordID, deletedRecord.ZoneName, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

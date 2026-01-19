@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/types"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -24,23 +24,14 @@ import (
 	"golang.org/x/term"
 )
 
-var recordType string
-var recordName string
-var recordContent string
-var allZones bool
-var compact bool
-var noCache bool
-
-type RecordWithZone struct {
-	dns.RecordResponse
-	ZoneName string
-}
+var dnsRecordsKey = executor.NewKey[[]types.DnsRecordWithZone]("dnsRecords")
 
 var listCmd = &cobra.Command{
 	Use:   "list [zone]",
 	Short: "Lists, searches, and filters DNS records for a given zone or all zones",
 	Args:  cobra.MaximumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		allZones, _ := cmd.Flags().GetBool("all")
 		if allZones && len(args) > 0 {
 			return fmt.Errorf("cannot specify a zone when using the --all flag")
 		}
@@ -49,41 +40,47 @@ var listCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: executor.NewBuilder[*cf.Client, []types.DnsRecordWithZone]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching DNS records", fetchDnsRecords).
-		Display(printDnsRecords).
-		SkipCache(noCache).
-		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+	Run: executor.New().
+		WithClient().
+		WithPagination().
+		WithNoCache().
+		Step(executor.NewStep(dnsRecordsKey, "Fetching DNS records").Func(fetchDnsRecords)).
+		Caches(func(ctx *executor.Context) ([]string, error) {
+			allZones, _ := ctx.Cmd.Flags().GetBool("all")
 			if allZones {
 				return nil, nil
 			}
-			client, _ := cloudflare.NewClient()
-			zoneID, _, err := cloudflare.LookupZone(client, args[0])
+			zoneID, _, err := cloudflare.LookupZone(ctx.Client, ctx.Args[0])
 			if err != nil {
 				return nil, err
 			}
 			return []string{fmt.Sprintf("zone:%s", zoneID)}, nil
 		}).
-		Build().
-		CobraRun(),
+		Display(printDnsRecords).
+		Run(),
 }
 
 func init() {
-	listCmd.Flags().StringVar(&recordType, "type", "", "The type of the DNS record (A, CNAME, etc.)")
-	listCmd.Flags().StringVar(&recordName, "name", "", "The name of the DNS record")
-	listCmd.Flags().StringVar(&recordContent, "content", "", "The content of the DNS record")
-	listCmd.Flags().BoolVarP(&allZones, "all", "A", false, "List records across all zones")
-	listCmd.Flags().BoolVarP(&compact, "compact", "c", false, "Display output in a compact table format")
-	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
+	pagination.RegisterFlags(listCmd)
+	listCmd.Flags().String("type", "", "The type of the DNS record (A, CNAME, etc.)")
+	listCmd.Flags().String("name", "", "The name of the DNS record")
+	listCmd.Flags().String("content", "", "The content of the DNS record")
+	listCmd.Flags().BoolP("all", "A", false, "List records across all zones")
+	listCmd.Flags().BoolP("compact", "c", false, "Display output in a compact table format")
+	listCmd.Flags().Bool("no-cache", false, "Don't use the cache when listing records")
 	DnsCmd.AddCommand(listCmd)
 }
 
-func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progress chan<- string) ([]types.DnsRecordWithZone, error) {
+func fetchDnsRecords(ctx *executor.Context, progress chan<- string) ([]types.DnsRecordWithZone, error) {
+	allZones, _ := ctx.Cmd.Flags().GetBool("all")
+	recordType, _ := ctx.Cmd.Flags().GetString("type")
+	recordName, _ := ctx.Cmd.Flags().GetString("name")
+	recordContent, _ := ctx.Cmd.Flags().GetString("content")
+
 	if allZones {
 		progress <- "Fetching list of all zones"
 		var zoneList []zones.Zone
-		pager := client.Zones.ListAutoPaging(context.Background(), zones.ZoneListParams{})
+		pager := ctx.Client.Zones.ListAutoPaging(context.Background(), zones.ZoneListParams{})
 		for pager.Next() {
 			zoneList = append(zoneList, pager.Current())
 		}
@@ -100,7 +97,7 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 		for _, zone := range zoneList {
 			zone := zone
 			group.SubmitErr(func() ([]types.DnsRecordWithZone, error) {
-				records, err := getRecordsForZone(client, zone.ID, zone.Name)
+				records, err := getRecordsForZone(ctx.Client, zone.ID, zone.Name, recordType, recordName, recordContent)
 				if err != nil {
 					return nil, err
 				}
@@ -130,12 +127,12 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 		return allRecords, nil
 	}
 
-	zoneIdentifier := args[0]
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+	zoneIdentifier := ctx.Args[0]
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, err
 	}
-	records, err := getRecordsForZone(client, zoneID, zoneName)
+	records, err := getRecordsForZone(ctx.Client, zoneID, zoneName, recordType, recordName, recordContent)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +146,7 @@ func fetchDnsRecords(client *cf.Client, _ *cobra.Command, args []string, progres
 	return recordsWithZone, nil
 }
 
-func getRecordsForZone(client *cf.Client, zoneID, zoneName string) ([]dns.RecordResponse, error) {
+func getRecordsForZone(client *cf.Client, zoneID, zoneName, recordType, recordName, recordContent string) ([]dns.RecordResponse, error) {
 	params := dns.RecordListParams{ZoneID: cf.F(zoneID)}
 
 	if recordType != "" {
@@ -175,25 +172,33 @@ func getRecordsForZone(client *cf.Client, zoneID, zoneName string) ([]dns.Record
 	return records.Result, nil
 }
 
-func printDnsRecords(records []types.DnsRecordWithZone, fetchDuration time.Duration, err error) {
-	if err != nil {
-		fmt.Println(ui.ErrorMessage("Failed to list DNS records", err))
+func printDnsRecords(ctx *executor.Context) {
+	if ctx.Error != nil {
+		fmt.Println(ui.ErrorMessage("Failed to list DNS records", ctx.Error))
 		return
 	}
 
-	if len(records) == 0 {
+	records := executor.Get(ctx, dnsRecordsKey)
+	paginated, info := pagination.Paginate(records, ctx.Pagination)
+
+	if len(paginated) == 0 {
 		fmt.Println(ui.Warning("No DNS records found matching your criteria"))
 		return
 	}
 
+	compact, _ := ctx.Cmd.Flags().GetBool("compact")
+	allZones, _ := ctx.Cmd.Flags().GetBool("all")
+
 	if compact {
-		printDnsRecordsCompact(records)
+		printDnsRecordsCompact(paginated)
 	} else {
-		printDnsRecordsCards(records)
+		printDnsRecordsCards(paginated, allZones)
 	}
 
 	fmt.Println()
-	fmt.Println(ui.Success(fmt.Sprintf("Found %d DNS record(s) %s", len(records), ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))))
+	footer := fmt.Sprintf("Showing %d of %d DNS record(s)", info.Showing, info.Total)
+	footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
+	fmt.Println(ui.Success(footer))
 }
 
 func printDnsRecordsCompact(records []types.DnsRecordWithZone) {
@@ -255,7 +260,7 @@ func printDnsRecordsCompact(records []types.DnsRecordWithZone) {
 	fmt.Println(t)
 }
 
-func printDnsRecordsCards(records []types.DnsRecordWithZone) {
+func printDnsRecordsCards(records []types.DnsRecordWithZone, allZones bool) {
 	fmt.Println(ui.Title("DNS Records"))
 	fmt.Println()
 

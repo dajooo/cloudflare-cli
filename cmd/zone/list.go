@@ -3,58 +3,50 @@ package zone
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
-	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/zones"
 	"github.com/spf13/cobra"
 )
 
-var accountID string
-var status string
-var noCache bool
+var zonesKey = executor.NewKey[[]zones.Zone]("zones")
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all zones in an account",
-	Run: executor.NewBuilder[*cf.Client, []zones.Zone]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching zones", fetchZones).
-		SkipCache(noCache).
-		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		WithPagination().
+		WithNoCache().
+		Step(executor.NewStep(zonesKey, "Fetching zones").Func(fetchZones)).
+		Caches(func(ctx *executor.Context) ([]string, error) {
 			return []string{"zones:list"}, nil
 		}).
 		Display(printZonesList).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	listCmd.Flags().StringVar(&status, "status", "", "The status of the zones to list (active, pending)")
-	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
+	pagination.RegisterFlags(listCmd)
+	listCmd.Flags().String("status", "", "The status of the zones to list (active, pending)")
+	listCmd.Flags().Bool("no-cache", false, "Don't use the cache when listing records")
 	ZoneCmd.AddCommand(listCmd)
 }
 
-func fetchZones(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- string) ([]zones.Zone, error) {
+func fetchZones(ctx *executor.Context, _ chan<- string) ([]zones.Zone, error) {
 	params := zones.ZoneListParams{}
+	params.Account.Value.ID.Value = ctx.AccountID
 
-	accID, err := cloudflare.GetAccountID(client, cmd, accountID)
-	// For listing, if GetAccountID returns error (e.g. multiple found), we might default to empty?
-	// But enforcing context is better.
-	if err != nil {
-		return nil, err
-	}
-	params.Account.Value.ID.Value = accID
-
-	if status != "" {
+	if status, _ := ctx.Cmd.Flags().GetString("status"); status != "" {
 		params.Status.Value = zones.ZoneListParamsStatus(status)
 	}
 
-	zonesList, err := client.Zones.List(context.Background(), params)
+	zonesList, err := ctx.Client.Zones.List(context.Background(), params)
 	if err != nil {
 		return nil, err
 	}
@@ -67,19 +59,22 @@ func fetchZones(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- stri
 	return zonesList.Result, nil
 }
 
-func printZonesList(zonesList []zones.Zone, fetchDuration time.Duration, err error) {
+func printZonesList(ctx *executor.Context) {
 	rb := response.New().
 		Title("Accessible Zones").
 		NoItemsMessage("No zones found")
 
-	if err != nil {
-		rb.Error("Error fetching zones", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error fetching zones", ctx.Error).Display()
 		return
 	}
 
-	rb.Summary("Total:", len(zonesList))
+	zonesList := executor.Get(ctx, zonesKey)
+	paginated, info := pagination.Paginate(zonesList, ctx.Pagination)
 
-	for i, zone := range zonesList {
+	rb.Summary("Total:", info.Total)
+
+	for i, zone := range paginated {
 		icb := response.NewItemContent().
 			Add("Name:", ui.Text(zone.Name)).
 			Add("ID:", ui.Muted(zone.ID)).
@@ -93,8 +88,13 @@ func printZonesList(zonesList []zones.Zone, fetchDuration time.Duration, err err
 		rb.AddItem(cardTitle, icb.String())
 	}
 
-	if len(zonesList) > 0 {
-		rb.FooterSuccess("Found %d accessible zone(s) %s", len(zonesList), ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))
+	if len(paginated) > 0 {
+		footer := fmt.Sprintf("Showing %d of %d zone(s)", info.Showing, info.Total)
+		if info.HasMore {
+			footer += fmt.Sprintf(" (page %d)", info.Page)
+		}
+		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
+		rb.FooterSuccess(footer)
 	}
 
 	rb.Display()

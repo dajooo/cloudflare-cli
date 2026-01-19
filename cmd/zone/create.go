@@ -3,9 +3,7 @@ package zone
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -14,50 +12,45 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var createAccountID string
-var jumpstart bool
+var createdZoneKey = executor.NewKey[*zones.Zone]("createdZone")
 
 var createCmd = &cobra.Command{
 	Use:   "create <domain>",
 	Short: "Adds a new domain to Cloudflare",
 	Args:  cobra.ExactArgs(1),
-	Run: executor.NewBuilder[*cf.Client, *zones.Zone]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Creating zone", createZone).
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(createdZoneKey, "Creating zone").Func(createZone)).
 		Display(printCreateZoneResult).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	createCmd.Flags().BoolVar(&jumpstart, "jumpstart", false, "Automatically scan for common DNS records")
+	createCmd.Flags().Bool("jumpstart", false, "Automatically scan for common DNS records")
 	ZoneCmd.AddCommand(createCmd)
 }
 
-func createZone(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*zones.Zone, error) {
-	domain := args[0]
+func createZone(ctx *executor.Context, _ chan<- string) (*zones.Zone, error) {
+	domain := ctx.Args[0]
 	params := zones.ZoneNewParams{
-		Name: cf.F(domain),
+		Name:    cf.F(domain),
+		Account: cf.F(zones.ZoneNewParamsAccount{ID: cf.F(ctx.AccountID)}),
 	}
 
-	accID, err := cloudflare.GetAccountID(client, cmd, createAccountID)
-	if err != nil {
-		return nil, err
-	}
-	params.Account = cf.F(zones.ZoneNewParamsAccount{ID: cf.F(accID)})
-
-	zone, err := client.Zones.New(context.Background(), params)
+	zone, err := ctx.Client.Zones.New(context.Background(), params)
 	if err != nil {
 		return nil, err
 	}
 	return zone, nil
 }
 
-func printCreateZoneResult(zone *zones.Zone, duration time.Duration, err error) {
+func printCreateZoneResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error creating zone", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error creating zone", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully created zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	zone := executor.Get(ctx, createdZoneKey)
+	rb.FooterSuccess("Successfully created zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

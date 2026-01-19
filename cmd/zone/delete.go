@@ -3,7 +3,6 @@ package zone
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
@@ -14,12 +13,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var yes bool
-
 type DeletedZoneInfo struct {
 	ID   string
 	Name string
 }
+
+var deletedZoneKey = executor.NewKey[*DeletedZoneInfo]("deletedZone")
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <zone_name|zone_id>",
@@ -29,12 +28,13 @@ var deleteCmd = &cobra.Command{
 }
 
 func init() {
-	deleteCmd.Flags().BoolVar(&yes, "yes", false, "Bypass the confirmation prompt")
+	deleteCmd.Flags().Bool("yes", false, "Bypass the confirmation prompt")
 	ZoneCmd.AddCommand(deleteCmd)
 }
 
 func executeZoneDelete(cmd *cobra.Command, args []string) {
 	zoneIdentifier := args[0]
+	yes, _ := cmd.Flags().GetBool("yes")
 
 	if !yes {
 		confirmed, err := ui.Confirm(fmt.Sprintf("Are you sure you want to delete zone %s?", zoneIdentifier))
@@ -44,23 +44,22 @@ func executeZoneDelete(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	executor.NewBuilder[*cf.Client, *DeletedZoneInfo]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Deleting zone", deleteZone).
+	executor.New().
+		WithClient().
+		Step(executor.NewStep(deletedZoneKey, "Deleting zone").Func(deleteZone)).
 		Display(printDeleteZoneResult).
-		Build().
-		CobraRun()(cmd, args)
+		Run()(cmd, args)
 }
 
-func deleteZone(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*DeletedZoneInfo, error) {
-	zoneIdentifier := args[0]
+func deleteZone(ctx *executor.Context, _ chan<- string) (*DeletedZoneInfo, error) {
+	zoneIdentifier := ctx.Args[0]
 
-	zoneID, zoneName, err := cloudflare.LookupZone(client, zoneIdentifier)
+	zoneID, zoneName, err := cloudflare.LookupZone(ctx.Client, zoneIdentifier)
 	if err != nil {
 		return nil, fmt.Errorf("error finding zone: %w", err)
 	}
 
-	_, err = client.Zones.Delete(context.Background(), zones.ZoneDeleteParams{ZoneID: cf.F(zoneID)})
+	_, err = ctx.Client.Zones.Delete(context.Background(), zones.ZoneDeleteParams{ZoneID: cf.F(zoneID)})
 	if err != nil {
 		return nil, err
 	}
@@ -71,11 +70,12 @@ func deleteZone(client *cf.Client, _ *cobra.Command, args []string, _ chan<- str
 	}, nil
 }
 
-func printDeleteZoneResult(zone *DeletedZoneInfo, duration time.Duration, err error) {
+func printDeleteZoneResult(ctx *executor.Context) {
 	rb := response.New()
-	if err != nil {
-		rb.Error("Error deleting zone", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error deleting zone", ctx.Error).Display()
 		return
 	}
-	rb.FooterSuccess("Successfully deleted zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", duration))).Display()
+	zone := executor.Get(ctx, deletedZoneKey)
+	rb.FooterSuccess("Successfully deleted zone %s (%s) %s", zone.Name, zone.ID, ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))).Display()
 }

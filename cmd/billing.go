@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"context"
-	"time"
+	"fmt"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/flags"
 	"dario.lol/cf/internal/ui"
@@ -13,6 +12,8 @@ import (
 	"github.com/cloudflare/cloudflare-go/v6/billing"
 	"github.com/spf13/cobra"
 )
+
+var billingProfileKey = executor.NewKey[*billing.ProfileGetResponse]("billingProfile")
 
 var billingCmd = &cobra.Command{
 	Use:   "billing",
@@ -27,53 +28,12 @@ var profileCmd = &cobra.Command{
 var billingProfileGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get billing profile",
-	Run: executor.NewBuilder[*cf.Client, *billing.ProfileGetResponse]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching billing profile", func(client *cf.Client, cmd *cobra.Command, args []string, progress chan<- string) (*billing.ProfileGetResponse, error) {
-			accountID, err := cloudflare.GetAccountID(client, cmd, "")
-			if err != nil {
-				return nil, err
-			}
-
-			profile, err := client.Billing.Profiles.Get(context.Background(), billing.ProfileGetParams{
-				AccountID: cf.F(accountID),
-			})
-			if err != nil {
-				return nil, err
-			}
-			return profile, nil
-		}).
-		Display(func(profile *billing.ProfileGetResponse, fetchDuration time.Duration, err error) {
-			rb := response.New().Title("Billing Profile")
-			if err != nil {
-				rb.Error("Error fetching billing profile", err).Display()
-				return
-			}
-
-			icb := response.NewItemContent().
-				Add("First Name:", ui.Text(profile.FirstName)).
-				Add("Last Name:", ui.Text(profile.LastName)).
-				Add("Company:", ui.Text(profile.Company)).
-				Add("Address:", ui.Text(profile.Address)).
-				Add("City:", ui.Text(profile.City)).
-				Add("State:", ui.Text(profile.State)).
-				Add("Zip:", ui.Text(profile.Zipcode)).
-				Add("Country:", ui.Text(profile.Country))
-
-			if profile.Telephone != "" {
-				icb.Add("Phone:", ui.Text(profile.Telephone))
-			}
-
-			if profile.PaymentEmail != "" {
-				icb.Add("Payment Email:", ui.Text(profile.PaymentEmail))
-			}
-
-			rb.AddItem("Profile Details", icb.String())
-			rb.FooterSuccess("Fetched billing profile in %v", fetchDuration)
-			rb.Display()
-		}).
-		Build().
-		CobraRun(),
+	Run: executor.New().
+		WithClient().
+		WithAccountID().
+		Step(executor.NewStep(billingProfileKey, "Fetching billing profile").Func(fetchBillingProfile)).
+		Display(printBillingProfile).
+		Run(),
 }
 
 func init() {
@@ -81,4 +41,43 @@ func init() {
 	profileCmd.AddCommand(billingProfileGetCmd)
 	billingCmd.AddCommand(profileCmd)
 	rootCmd.AddCommand(billingCmd)
+}
+
+func fetchBillingProfile(ctx *executor.Context, _ chan<- string) (*billing.ProfileGetResponse, error) {
+	return ctx.Client.Billing.Profiles.Get(context.Background(), billing.ProfileGetParams{
+		AccountID: cf.F(ctx.AccountID),
+	})
+}
+
+func printBillingProfile(ctx *executor.Context) {
+	rb := response.New().Title("Billing Profile")
+
+	if ctx.Error != nil {
+		rb.Error("Error fetching billing profile", ctx.Error).Display()
+		return
+	}
+
+	profile := executor.Get(ctx, billingProfileKey)
+
+	icb := response.NewItemContent().
+		Add("First Name:", ui.Text(profile.FirstName)).
+		Add("Last Name:", ui.Text(profile.LastName)).
+		Add("Company:", ui.Text(profile.Company)).
+		Add("Address:", ui.Text(profile.Address)).
+		Add("City:", ui.Text(profile.City)).
+		Add("State:", ui.Text(profile.State)).
+		Add("Zip:", ui.Text(profile.Zipcode)).
+		Add("Country:", ui.Text(profile.Country))
+
+	if profile.Telephone != "" {
+		icb.Add("Phone:", ui.Text(profile.Telephone))
+	}
+
+	if profile.PaymentEmail != "" {
+		icb.Add("Payment Email:", ui.Text(profile.PaymentEmail))
+	}
+
+	rb.AddItem("Profile Details", icb.String())
+	rb.FooterSuccess("Fetched billing profile %s", ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration)))
+	rb.Display()
 }

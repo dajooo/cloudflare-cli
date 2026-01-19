@@ -3,63 +3,65 @@ package account
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"dario.lol/cf/internal/cloudflare"
 	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/executor"
+	"dario.lol/cf/internal/pagination"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
-	cf "github.com/cloudflare/cloudflare-go/v6"
 	"github.com/cloudflare/cloudflare-go/v6/accounts"
 	"github.com/spf13/cobra"
 )
 
-var noCache bool
+var accountsKey = executor.NewKey[[]accounts.Account]("accounts")
 
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all accessible accounts",
-	Run: executor.NewBuilder[*cf.Client, []accounts.Account]().
-		Setup("Decrypting configuration", cloudflare.NewClient).
-		Fetch("Fetching accounts", fetchAccounts).
-		SkipCache(noCache).
-		Caches(func(cmd *cobra.Command, args []string) ([]string, error) {
+	Run: executor.New().
+		WithClient().
+		WithPagination().
+		WithNoCache().
+		Step(executor.NewStep(accountsKey, "Fetching accounts").Func(fetchAccounts)).
+		Caches(func(ctx *executor.Context) ([]string, error) {
 			return []string{"accounts:list"}, nil
 		}).
 		Display(printAccountsList).
-		Build().
-		CobraRun(),
+		Run(),
 }
 
 func init() {
-	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
+	pagination.RegisterFlags(listCmd)
+	listCmd.Flags().Bool("no-cache", false, "Don't use the cache when listing")
 	AccountCmd.AddCommand(listCmd)
 }
 
-func fetchAccounts(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string) ([]accounts.Account, error) {
-	accountsList, err := client.Accounts.List(context.Background(), accounts.AccountListParams{})
+func fetchAccounts(ctx *executor.Context, _ chan<- string) ([]accounts.Account, error) {
+	accountsList, err := ctx.Client.Accounts.List(context.Background(), accounts.AccountListParams{})
 	if err != nil {
 		return nil, err
 	}
 	return accountsList.Result, nil
 }
 
-func printAccountsList(accountsList []accounts.Account, fetchDuration time.Duration, err error) {
+func printAccountsList(ctx *executor.Context) {
 	rb := response.New().
 		Title("Accessible Accounts").
 		NoItemsMessage("No accounts found")
 
-	if err != nil {
-		rb.Error("Error fetching accounts", err).Display()
+	if ctx.Error != nil {
+		rb.Error("Error fetching accounts", ctx.Error).Display()
 		return
 	}
 
-	rb.Summary("Total:", len(accountsList))
+	accountsList := executor.Get(ctx, accountsKey)
+	paginated, info := pagination.Paginate(accountsList, ctx.Pagination)
+
+	rb.Summary("Total:", info.Total)
 
 	currentAccountID := config.Cfg.AccountID
 
-	for i, account := range accountsList {
+	for i, account := range paginated {
 		icb := response.NewItemContent().
 			Add("Name:", ui.Text(account.Name))
 
@@ -90,8 +92,13 @@ func printAccountsList(accountsList []accounts.Account, fetchDuration time.Durat
 		rb.AddItem(cardTitle, icb.String())
 	}
 
-	if len(accountsList) > 0 {
-		rb.FooterSuccess("Found %d accessible account(s) %s", len(accountsList), ui.Muted(fmt.Sprintf("(took %v)", fetchDuration)))
+	if len(paginated) > 0 {
+		footer := fmt.Sprintf("Showing %d of %d account(s)", info.Showing, info.Total)
+		if info.HasMore {
+			footer += fmt.Sprintf(" (page %d)", info.Page)
+		}
+		footer += " " + ui.Muted(fmt.Sprintf("(took %v)", ctx.Duration))
+		rb.FooterSuccess(footer)
 	}
 
 	rb.Display()
