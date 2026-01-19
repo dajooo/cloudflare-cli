@@ -39,14 +39,13 @@ func init() {
 	D1Cmd.AddCommand(bindCmd)
 }
 
-func bindDatabase(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
-	accID, err := cloudflare.GetAccountID(client, bindAccountID)
+func bindDatabase(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, bindAccountID)
 	if err != nil {
 		return nil, err
 	}
 	dbName := args[0]
 
-	// 1. Resolve DB ID
 	pager := client.D1.Database.ListAutoPaging(context.Background(), d1.DatabaseListParams{
 		AccountID: cf.F(accID),
 	})
@@ -66,16 +65,6 @@ func bindDatabase(client *cf.Client, _ *cobra.Command, args []string, _ chan<- s
 		return nil, fmt.Errorf("database '%s' not found", dbName)
 	}
 
-	// 2. Get Bindings
-	// We need to fetch current project to preserve other bindings?
-	// The API *might* do a merge but we want to be safe for a map.
-	// Actually, `Edit` documentation for EnvVars says "To delete... set key to null".
-	// This usually implies a merge behavior for maps.
-	// However, for nested structs like `DeploymentConfigs`, sending just `Production` *might* overwrite if it's not a deep merge.
-	// Let's assume we should read and merge to be safe, or just try to send what we have.
-	// Given we are modifying `D1Databases` map key, a merge on the map is likely if the API supports partials properly.
-	// But let's fetch to be safe and also to verify project exists.
-
 	proj, err := client.Pages.Projects.Get(context.Background(), bindToProject, pages.ProjectGetParams{
 		AccountID: cf.F(accID),
 	})
@@ -83,13 +72,7 @@ func bindDatabase(client *cf.Client, _ *cobra.Command, args []string, _ chan<- s
 		return nil, fmt.Errorf("error getting project '%s': %w", bindToProject, err)
 	}
 
-	// 3. Prepare Update
-	// We will update both Production and Preview for consistency unless we add flags later.
-	// We need to construct the D1Databases map params.
-
-	// Production
 	prodD1s := make(map[string]pages.ProjectDeploymentConfigsProductionD1DatabaseParam)
-	// Copy existing
 	if proj.DeploymentConfigs.Production.D1Databases != nil {
 		for k, v := range proj.DeploymentConfigs.Production.D1Databases {
 			prodD1s[k] = pages.ProjectDeploymentConfigsProductionD1DatabaseParam{
@@ -97,14 +80,11 @@ func bindDatabase(client *cf.Client, _ *cobra.Command, args []string, _ chan<- s
 			}
 		}
 	}
-	// Add/Update new
 	prodD1s[bindBindingName] = pages.ProjectDeploymentConfigsProductionD1DatabaseParam{
 		ID: cf.F(dbID),
 	}
 
-	// Preview
 	prevD1s := make(map[string]pages.ProjectDeploymentConfigsPreviewD1DatabaseParam)
-	// Copy existing
 	if proj.DeploymentConfigs.Preview.D1Databases != nil {
 		for k, v := range proj.DeploymentConfigs.Preview.D1Databases {
 			prevD1s[k] = pages.ProjectDeploymentConfigsPreviewD1DatabaseParam{
@@ -112,12 +92,10 @@ func bindDatabase(client *cf.Client, _ *cobra.Command, args []string, _ chan<- s
 			}
 		}
 	}
-	// Add/Update new
 	prevD1s[bindBindingName] = pages.ProjectDeploymentConfigsPreviewD1DatabaseParam{
 		ID: cf.F(dbID),
 	}
 
-	// 4. Update Project
 	return client.Pages.Projects.Edit(context.Background(), bindToProject, pages.ProjectEditParams{
 		AccountID: cf.F(accID),
 		Project: pages.ProjectParam{

@@ -1,6 +1,7 @@
 package r2
 
 import (
+	"dario.lol/cf/internal/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -15,5 +16,6 @@ var bucketCmd = &cobra.Command{
 }
 
 func init() {
+	flags.RegisterAccountID(R2Cmd)
 	R2Cmd.AddCommand(bucketCmd)
 }

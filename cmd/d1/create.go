@@ -33,8 +33,8 @@ func init() {
 	D1Cmd.AddCommand(createCmd)
 }
 
-func createDatabase(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*d1.D1, error) {
-	accID, err := cloudflare.GetAccountID(client, createAccountID)
+func createDatabase(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*d1.D1, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, createAccountID)
 	if err != nil {
 		return nil, err
 	}

@@ -39,8 +39,8 @@ func init() {
 	KVCmd.AddCommand(bindCmd)
 }
 
-func bindNamespace(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
-	accID, err := cloudflare.GetAccountID(client, bindAccountID)
+func bindNamespace(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, bindAccountID)
 	if err != nil {
 		return nil, err
 	}

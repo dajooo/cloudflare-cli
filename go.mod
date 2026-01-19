@@ -1,6 +1,6 @@
 module dario.lol/cf
 
-go 1.25.5
+go 1.25.6
 
 require (
 	filippo.io/age v1.2.1

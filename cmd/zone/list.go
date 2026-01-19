@@ -34,17 +34,22 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	listCmd.Flags().StringVar(&accountID, "account-id", "", "The account ID to list zones for")
 	listCmd.Flags().StringVar(&status, "status", "", "The status of the zones to list (active, pending)")
 	listCmd.Flags().BoolVar(&noCache, "no-cache", false, "Don't use the cache when listing records")
 	ZoneCmd.AddCommand(listCmd)
 }
 
-func fetchZones(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string) ([]zones.Zone, error) {
+func fetchZones(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- string) ([]zones.Zone, error) {
 	params := zones.ZoneListParams{}
-	if accountID != "" {
-		params.Account.Value.ID.Value = accountID
+
+	accID, err := cloudflare.GetAccountID(client, cmd, accountID)
+	// For listing, if GetAccountID returns error (e.g. multiple found), we might default to empty?
+	// But enforcing context is better.
+	if err != nil {
+		return nil, err
 	}
+	params.Account.Value.ID.Value = accID
+
 	if status != "" {
 		params.Status.Value = zones.ZoneListParamsStatus(status)
 	}

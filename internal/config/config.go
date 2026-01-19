@@ -7,9 +7,11 @@ import (
 )
 
 type Config struct {
-	APIToken EncryptedString `mapstructure:"api_token"`
-	APIKey   EncryptedString `mapstructure:"api_key"`
-	APIEmail string          `mapstructure:"api_email"`
+	APIToken      EncryptedString `mapstructure:"api_token"`
+	APIKey        EncryptedString `mapstructure:"api_key"`
+	APIEmail      string          `mapstructure:"api_email"`
+	AccountID     string          `mapstructure:"account_id"`
+	KVNamespaceID string          `mapstructure:"kv_namespace_id"`
 }
 
 var ErrNotLoggedIn = errors.New("you are not logged in. Please use 'cf login'")
@@ -41,6 +43,16 @@ func LoadConfig() error {
 	}
 	newCfg.APIEmail = string(email)
 
+	accountID, err := db.Get(db.ConfigBucket, []byte("account_id"))
+	if err == nil {
+		newCfg.AccountID = string(accountID)
+	}
+
+	kvNamespaceID, err := db.Get(db.ConfigBucket, []byte("kv_namespace_id"))
+	if err == nil {
+		newCfg.KVNamespaceID = string(kvNamespaceID)
+	}
+
 	Cfg = newCfg
 
 	if Cfg.APIToken == "" && Cfg.APIEmail == "" && Cfg.APIKey == "" {
@@ -68,6 +80,18 @@ func SaveConfig() error {
 
 	if err := db.Set(db.ConfigBucket, []byte("api_email"), []byte(Cfg.APIEmail)); err != nil {
 		return err
+	}
+
+	if Cfg.AccountID != "" {
+		if err := db.Set(db.ConfigBucket, []byte("account_id"), []byte(Cfg.AccountID)); err != nil {
+			return err
+		}
+	}
+
+	if Cfg.KVNamespaceID != "" {
+		if err := db.Set(db.ConfigBucket, []byte("kv_namespace_id"), []byte(Cfg.KVNamespaceID)); err != nil {
+			return err
+		}
 	}
 
 	return nil

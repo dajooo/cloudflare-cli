@@ -32,8 +32,8 @@ func init() {
 	bucketCmd.AddCommand(listCmd)
 }
 
-func listBuckets(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string) (*r2.BucketListResponse, error) {
-	accID, err := cloudflare.GetAccountID(client, listAccountID)
+func listBuckets(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- string) (*r2.BucketListResponse, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, listAccountID)
 	if err != nil {
 		return nil, err
 	}

@@ -39,14 +39,13 @@ func init() {
 	R2Cmd.AddCommand(bindCmd)
 }
 
-func bindBucket(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
-	accID, err := cloudflare.GetAccountID(client, bindAccountID)
+func bindBucket(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*pages.Project, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, bindAccountID)
 	if err != nil {
 		return nil, err
 	}
 	bucketName := args[0]
 
-	// 1. Verify Bucket Exists
 	res, err := client.R2.Buckets.List(context.Background(), r2.BucketListParams{
 		AccountID: cf.F(accID),
 	})
@@ -65,7 +64,6 @@ func bindBucket(client *cf.Client, _ *cobra.Command, args []string, _ chan<- str
 		return nil, fmt.Errorf("bucket '%s' not found", bucketName)
 	}
 
-	// 2. Refresh Project
 	proj, err := client.Pages.Projects.Get(context.Background(), bindToProject, pages.ProjectGetParams{
 		AccountID: cf.F(accID),
 	})
@@ -73,9 +71,6 @@ func bindBucket(client *cf.Client, _ *cobra.Command, args []string, _ chan<- str
 		return nil, fmt.Errorf("error getting project '%s': %w", bindToProject, err)
 	}
 
-	// 3. Prepare Update
-
-	// Production
 	prodBuckets := make(map[string]pages.ProjectDeploymentConfigsProductionR2BucketParam)
 	if proj.DeploymentConfigs.Production.R2Buckets != nil {
 		for k, v := range proj.DeploymentConfigs.Production.R2Buckets {
@@ -92,7 +87,6 @@ func bindBucket(client *cf.Client, _ *cobra.Command, args []string, _ chan<- str
 		Name: cf.F(bucketName),
 	}
 
-	// Preview
 	prevBuckets := make(map[string]pages.ProjectDeploymentConfigsPreviewR2BucketParam)
 	if proj.DeploymentConfigs.Preview.R2Buckets != nil {
 		for k, v := range proj.DeploymentConfigs.Preview.R2Buckets {
@@ -109,7 +103,6 @@ func bindBucket(client *cf.Client, _ *cobra.Command, args []string, _ chan<- str
 		Name: cf.F(bucketName),
 	}
 
-	// 4. Update Project
 	return client.Pages.Projects.Edit(context.Background(), bindToProject, pages.ProjectEditParams{
 		AccountID: cf.F(accID),
 		Project: pages.ProjectParam{

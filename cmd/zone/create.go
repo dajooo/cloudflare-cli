@@ -30,19 +30,21 @@ var createCmd = &cobra.Command{
 }
 
 func init() {
-	createCmd.Flags().StringVar(&createAccountID, "account-id", "", "The account ID to create the zone in")
 	createCmd.Flags().BoolVar(&jumpstart, "jumpstart", false, "Automatically scan for common DNS records")
 	ZoneCmd.AddCommand(createCmd)
 }
 
-func createZone(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*zones.Zone, error) {
+func createZone(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*zones.Zone, error) {
 	domain := args[0]
 	params := zones.ZoneNewParams{
 		Name: cf.F(domain),
 	}
-	if createAccountID != "" {
-		params.Account = cf.F(zones.ZoneNewParamsAccount{ID: cf.F(createAccountID)})
+
+	accID, err := cloudflare.GetAccountID(client, cmd, createAccountID)
+	if err != nil {
+		return nil, err
 	}
+	params.Account = cf.F(zones.ZoneNewParamsAccount{ID: cf.F(accID)})
 
 	zone, err := client.Zones.New(context.Background(), params)
 	if err != nil {

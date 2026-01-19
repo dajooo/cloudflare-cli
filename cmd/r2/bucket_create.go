@@ -33,8 +33,8 @@ func init() {
 	bucketCmd.AddCommand(createCmd)
 }
 
-func createBucket(client *cf.Client, _ *cobra.Command, args []string, _ chan<- string) (*r2.Bucket, error) {
-	accID, err := cloudflare.GetAccountID(client, accountID)
+func createBucket(client *cf.Client, cmd *cobra.Command, args []string, _ chan<- string) (*r2.Bucket, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, accountID)
 	if err != nil {
 		return nil, err
 	}

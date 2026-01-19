@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"dario.lol/cf/internal/cloudflare"
+	"dario.lol/cf/internal/config"
 	"dario.lol/cf/internal/executor"
 	"dario.lol/cf/internal/ui"
 	"dario.lol/cf/internal/ui/response"
@@ -60,6 +61,19 @@ func printUserInfo(user *user.UserGetResponse, fetchDuration time.Duration, err 
 		identityContent.Add("Country:", ui.Text(user.Country))
 	}
 	rb.AddItem("User Identity", identityContent.String())
+
+	contextContent := response.NewItemContent()
+	if config.Cfg.AccountID != "" {
+		contextContent.Add("Account ID:", ui.Text(config.Cfg.AccountID))
+	} else {
+		contextContent.Add("Account ID:", ui.Muted("Not selected"))
+	}
+	if config.Cfg.KVNamespaceID != "" {
+		contextContent.Add("KV Namespace:", ui.Text(config.Cfg.KVNamespaceID))
+	} else {
+		contextContent.Add("KV Namespace:", ui.Muted("Not selected"))
+	}
+	rb.AddItem("Current Context", contextContent.String())
 
 	statusContent := response.NewItemContent()
 	if user.Suspended {

@@ -32,8 +32,8 @@ func init() {
 	D1Cmd.AddCommand(listCmd)
 }
 
-func listDatabases(client *cf.Client, _ *cobra.Command, _ []string, _ chan<- string) ([]d1.DatabaseListResponse, error) {
-	accID, err := cloudflare.GetAccountID(client, listAccountID)
+func listDatabases(client *cf.Client, cmd *cobra.Command, _ []string, _ chan<- string) ([]d1.DatabaseListResponse, error) {
+	accID, err := cloudflare.GetAccountID(client, cmd, listAccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func printListDatabases(dbs []d1.DatabaseListResponse, duration time.Duration, e
 	}
 
 	for _, db := range dbs {
-		rb.AddItem(db.Name, ui.Muted(db.UUID))
+		rb.AddItem(db.Name, ui.Muted(fmt.Sprintf("ID: %s", db.UUID)))
 	}
 
 	if len(dbs) == 0 {
