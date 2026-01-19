@@ -22,7 +22,15 @@ var getCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: executor.New().
 		WithClient().
-		Step(executor.NewStep(sslInfoKey, "Fetching SSL status").Func(getSSL)).
+		Step(executor.NewStep(sslInfoKey, "Fetching SSL status").
+			Func(getSSL).
+			CacheKeyFunc(func(ctx *executor.Context) string {
+				zoneID, _, err := cloudflare.LookupZone(ctx.Client, ctx.Args[0])
+				if err != nil {
+					return ""
+				}
+				return fmt.Sprintf("zone:%s:ssl", zoneID)
+			})).
 		Display(printSSLResult).
 		Run(),
 }

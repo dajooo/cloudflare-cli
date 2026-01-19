@@ -30,7 +30,7 @@ var deleteCmd = &cobra.Command{
 		Invalidates(func(ctx *executor.Context) []string {
 			zoneID := executor.Get(ctx, executor.ZoneIDKey)
 			if zoneID != "" {
-				return []string{fmt.Sprintf("zone:%s", zoneID)}
+				return []string{fmt.Sprintf("zone:%s:", zoneID)}
 			}
 			return nil
 		}).

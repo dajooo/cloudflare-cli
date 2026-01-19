@@ -22,7 +22,9 @@ var listNamespaceCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		WithPagination().
-		Step(executor.NewStep(namespacesKey, "Listing namespaces").Func(listNamespaces)).
+		Step(executor.NewStep(namespacesKey, "Listing namespaces").
+			Func(listNamespaces).
+			CacheKey("kv:namespaces:list")).
 		Display(printListNamespaces).
 		Run(),
 }

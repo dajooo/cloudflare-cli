@@ -22,6 +22,9 @@ var createCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		Step(executor.NewStep(createdZoneKey, "Creating zone").Func(createZone)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"zones:list"}
+		}).
 		Display(printCreateZoneResult).
 		Run(),
 }

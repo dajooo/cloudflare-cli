@@ -22,6 +22,9 @@ var createCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		Step(executor.NewStep(createdDatabaseKey, "Creating database").Func(createDatabase)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"d1:databases:list"}
+		}).
 		Display(printCreateDatabase).
 		Run(),
 }

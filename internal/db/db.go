@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -134,6 +135,38 @@ func InvalidateTags(tags []string) error {
 				if err := tagsBucket.Delete([]byte(tag)); err != nil {
 					return err
 				}
+			}
+		}
+
+		for key := range keysToDelete {
+			if err := cacheBucket.Delete([]byte(key)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+func InvalidatePrefix(prefix string) error {
+	db, err := Open()
+	if err != nil {
+		return err
+	}
+	return db.Update(func(tx *bbolt.Tx) error {
+		tagsBucket := tx.Bucket(CacheTagsBucket)
+		cacheBucket := tx.Bucket(CacheBucket)
+		keysToDelete := make(map[string]struct{})
+
+		c := tagsBucket.Cursor()
+		p := []byte(prefix)
+		for k, v := c.Seek(p); k != nil && bytes.HasPrefix(k, p); k, v = c.Next() {
+			var keys []string
+			if err := json.Unmarshal(v, &keys); err == nil {
+				for _, key := range keys {
+					keysToDelete[key] = struct{}{}
+				}
+			}
+			if err := tagsBucket.Delete(k); err != nil {
+				return err
 			}
 		}
 

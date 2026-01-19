@@ -22,7 +22,9 @@ var listCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		WithPagination().
-		Step(executor.NewStep(databasesKey, "Fetching databases").Func(listDatabases)).
+		Step(executor.NewStep(databasesKey, "Fetching databases").
+			Func(listDatabases).
+			CacheKey("d1:databases:list")).
 		Display(printListDatabases).
 		Run(),
 }

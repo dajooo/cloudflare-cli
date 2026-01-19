@@ -32,7 +32,7 @@ var updateCmd = &cobra.Command{
 		Invalidates(func(ctx *executor.Context) []string {
 			result := executor.Get(ctx, updatedRecordKey)
 			if result != nil {
-				return []string{fmt.Sprintf("zone:%s", result.ZoneID)}
+				return []string{fmt.Sprintf("zone:%s:", result.ZoneID)}
 			}
 			return nil
 		}).

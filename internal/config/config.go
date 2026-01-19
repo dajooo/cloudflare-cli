@@ -12,6 +12,7 @@ type Config struct {
 	APIEmail      string          `mapstructure:"api_email"`
 	AccountID     string          `mapstructure:"account_id"`
 	KVNamespaceID string          `mapstructure:"kv_namespace_id"`
+	Caching       bool            `mapstructure:"caching"`
 }
 
 var ErrNotLoggedIn = errors.New("you are not logged in. Please use 'cf login'")
@@ -53,6 +54,13 @@ func LoadConfig() error {
 		newCfg.KVNamespaceID = string(kvNamespaceID)
 	}
 
+	caching, err := db.Get(db.ConfigBucket, []byte("caching"))
+	if err == nil {
+		newCfg.Caching = string(caching) == "true"
+	} else {
+		newCfg.Caching = true // Default to true
+	}
+
 	Cfg = newCfg
 
 	if Cfg.APIToken == "" && Cfg.APIEmail == "" && Cfg.APIKey == "" {
@@ -92,6 +100,14 @@ func SaveConfig() error {
 		if err := db.Set(db.ConfigBucket, []byte("kv_namespace_id"), []byte(Cfg.KVNamespaceID)); err != nil {
 			return err
 		}
+	}
+
+	cachingStr := "false"
+	if Cfg.Caching {
+		cachingStr = "true"
+	}
+	if err := db.Set(db.ConfigBucket, []byte("caching"), []byte(cachingStr)); err != nil {
+		return err
 	}
 
 	return nil

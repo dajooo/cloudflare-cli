@@ -27,7 +27,7 @@ var createCmd = &cobra.Command{
 		Invalidates(func(ctx *executor.Context) []string {
 			record := executor.Get(ctx, createdRecordKey)
 			if record != nil {
-				return []string{fmt.Sprintf("zone:%s", record.ZoneID)}
+				return []string{fmt.Sprintf("zone:%s:", record.ZoneID)}
 			}
 			return nil
 		}).

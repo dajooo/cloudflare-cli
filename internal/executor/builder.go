@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"dario.lol/cf/internal/cloudflare"
@@ -229,7 +230,7 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 	start := time.Now()
 
 	for i, s := range b.steps {
-		if b.hasCacheKey(s) && b.invalidatesFunc == nil && !b.skipCache {
+		if b.hasCacheKey(s) && b.invalidatesFunc == nil && !b.skipCache && config.Cfg.Caching {
 			cacheKey := b.buildCacheKey(ctx, s)
 			if b.tryRestoreFromCache(ctx, cacheKey) {
 				ctx.Duration = time.Since(start)
@@ -261,7 +262,7 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		if b.hasCacheKey(s) && ctx.Error == nil && b.invalidatesFunc == nil {
+		if b.hasCacheKey(s) && ctx.Error == nil && b.invalidatesFunc == nil && config.Cfg.Caching {
 			cacheKey := b.buildCacheKey(ctx, s)
 			b.storeToCache(ctx, cacheKey, b.steps[i:])
 		}
@@ -273,8 +274,16 @@ func (b *ContextBuilder) execute(cmd *cobra.Command, args []string) {
 
 	if ctx.Error == nil && b.invalidatesFunc != nil {
 		tags := b.invalidatesFunc(ctx)
-		if len(tags) > 0 {
-			_ = db.InvalidateTags(tags)
+		var exactTags []string
+		for _, tag := range tags {
+			if strings.HasSuffix(tag, ":") {
+				_ = db.InvalidatePrefix(tag)
+			} else {
+				exactTags = append(exactTags, tag)
+			}
+		}
+		if len(exactTags) > 0 {
+			_ = db.InvalidateTags(exactTags)
 		}
 	}
 

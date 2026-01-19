@@ -41,6 +41,9 @@ func executeZoneDelete(cmd *cobra.Command, args []string) {
 			return fmt.Sprintf("Are you sure you want to delete zone %s (%s)?", executor.Get(ctx, executor.ZoneNameKey), executor.Get(ctx, executor.ZoneIDKey))
 		}).
 		Step(executor.NewStep(deletedZoneKey, "Deleting zone").Func(deleteZone)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"zones:list", "zone:" + executor.Get(ctx, executor.ZoneIDKey) + ":"}
+		}).
 		Display(printDeleteZoneResult).
 		Run()(cmd, args)
 }

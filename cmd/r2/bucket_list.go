@@ -22,7 +22,9 @@ var listCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		WithPagination().
-		Step(executor.NewStep(bucketsKey, "Fetching buckets").Func(listBuckets)).
+		Step(executor.NewStep(bucketsKey, "Fetching buckets").
+			Func(listBuckets).
+			CacheKey("r2:buckets:list")).
 		Display(printListBuckets).
 		Run(),
 }

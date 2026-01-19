@@ -22,6 +22,9 @@ var createCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		Step(executor.NewStep(createdBucketKey, "Creating bucket").Func(createBucket)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"r2:buckets:list"}
+		}).
 		Display(printCreateBucket).
 		Run(),
 }

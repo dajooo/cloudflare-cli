@@ -24,6 +24,13 @@ var setCmd = &cobra.Command{
 	Run: executor.New().
 		WithClient().
 		Step(executor.NewStep(sslSetInfoKey, "Updating SSL status").Func(setSSL)).
+		Invalidates(func(ctx *executor.Context) []string {
+			info := executor.Get(ctx, sslSetInfoKey)
+			if info != nil {
+				return []string{fmt.Sprintf("zone:%s:ssl", info.ZoneID)}
+			}
+			return nil
+		}).
 		Display(printSSLSetResult).
 		Run(),
 }

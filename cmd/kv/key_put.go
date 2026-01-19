@@ -23,6 +23,9 @@ var putKeyCmd = &cobra.Command{
 		WithAccountID().
 		WithKVNamespace().
 		Step(executor.NewStep(putResultKey, "Putting key").Func(putKey)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"kv:namespace:" + ctx.KVNamespace + ":"}
+		}).
 		Display(printPutKey).
 		Run(),
 }

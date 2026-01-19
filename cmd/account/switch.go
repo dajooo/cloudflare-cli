@@ -22,6 +22,9 @@ var switchCmd = &cobra.Command{
 	Run: executor.New().
 		WithClient().
 		Step(executor.NewStep(switchedAccountKey, "Verifying account").Func(runAccountSwitch)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"accounts:list", "user:whoami", "zones:list"}
+		}).
 		Display(printAccountSwitch).
 		Run(),
 }

@@ -22,6 +22,9 @@ var createNamespaceCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		Step(executor.NewStep(createdNamespaceKey, "Creating namespace").Func(createNamespace)).
+		Invalidates(func(ctx *executor.Context) []string {
+			return []string{"kv:namespaces:list"}
+		}).
 		Display(printCreateNamespace).
 		Run(),
 }

@@ -22,7 +22,11 @@ var getKeyCmd = &cobra.Command{
 		WithClient().
 		WithAccountID().
 		WithKVNamespace().
-		Step(executor.NewStep(keyValueKey, "Getting key").Func(getKey)).
+		Step(executor.NewStep(keyValueKey, "Getting key").
+			Func(getKey).
+			CacheKeyFunc(func(ctx *executor.Context) string {
+				return fmt.Sprintf("kv:namespace:%s:key:%s", ctx.KVNamespace, ctx.Args[0])
+			})).
 		Display(printGetKey).
 		Run(),
 }
