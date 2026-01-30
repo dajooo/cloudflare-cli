@@ -5,10 +5,10 @@ go 1.25.6
 require (
 	filippo.io/age v1.2.1
 	github.com/alitto/pond/v2 v2.5.0
-	github.com/charmbracelet/bubbles v0.21.0
+	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/fang v0.4.0
-	github.com/charmbracelet/huh v0.7.0
+	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.3
 	github.com/cloudflare/cloudflare-go/v6 v6.0.0
