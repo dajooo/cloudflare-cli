@@ -4,7 +4,7 @@ go 1.25.6
 
 require (
 	filippo.io/age v1.2.1
-	github.com/alitto/pond/v2 v2.5.0
+	github.com/alitto/pond/v2 v2.6.0
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/fang v0.4.0
