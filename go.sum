@@ -52,6 +52,8 @@ github.com/charmbracelet/x/xpty v0.1.2 h1:Pqmu4TEJ8KeA9uSkISKMU3f+C1F6OGBn8ABuGl
 github.com/charmbracelet/x/xpty v0.1.2/go.mod h1:XK2Z0id5rtLWcpeNiMYBccNNBrP2IJnzHI0Lq13Xzq4=
 github.com/cloudflare/cloudflare-go/v6 v6.0.0 h1:dJ6o3NUWeJnRQ6jlLi+y/ZE7vvAWTEm5hBWPlaiUxCM=
 github.com/cloudflare/cloudflare-go/v6 v6.0.0/go.mod h1:bNIqRTGO0VC9lqJYanVbO+UDJPqo+zoG3Gs9ioL9PIA=
+github.com/cloudflare/cloudflare-go/v6 v6.7.0 h1:MP6Xy5WmsyrxgTxoLeq/vraqR0nbTtXoHhW4vAYc4SY=
+github.com/cloudflare/cloudflare-go/v6 v6.7.0/go.mod h1:Lj3MUqjvKctXRpdRhLQxZYRrNZHuRs0XYuH8JtQGyoI=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
