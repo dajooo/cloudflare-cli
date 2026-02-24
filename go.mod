@@ -9,7 +9,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/fang v0.4.0
 	github.com/charmbracelet/huh v0.7.0
-	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/charmbracelet/lipgloss/v2 v2.0.0
 	github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.3
 	github.com/cloudflare/cloudflare-go/v6 v6.0.0
 	github.com/go-viper/mapstructure/v2 v2.2.1
